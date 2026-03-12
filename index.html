@@ -593,7 +593,7 @@ function updateEntryCount() {
 }
 
 // ── Interactions ──────────────────────────────────────────────
-function switchTab(id) { activelyEditing = false; activeTab=id; renderAll(); }
+function switchTab(id) { flushInputsToDom(activeTab); activelyEditing = false; activeTab=id; renderAll(); }
 
 function onFocus(tableId, localId, colKey, input) {
   const row = (data[tableId]||[]).find(r => r.localId===localId);
@@ -630,9 +630,28 @@ function updateSimple(tableId, value) {
   window._simpleTimer = setTimeout(() => saveSimple(tableId, value), 1000);
 }
 
+// Flush current DOM input values into data state before re-rendering
+function flushInputsToDom(tableId) {
+  const t = TABLES.find(x => x.id === tableId);
+  if (!t || t.simple) return;
+  const rows = data[tableId] || [];
+  const trs  = document.querySelectorAll("#table-area tbody tr");
+  trs.forEach((tr, ri) => {
+    const row = rows[ri];
+    if (!row) return;
+    const inputs = tr.querySelectorAll("input:not([disabled])");
+    t.cols.forEach((c, ci) => {
+      if (inputs[ci]) row[c.key] = inputs[ci].value;
+    });
+  });
+}
+
 function addRow(tableId) {
+  // Save any unsaved input values from the DOM before re-rendering
+  flushInputsToDom(tableId);
   if (!data[tableId]) data[tableId]=[];
   data[tableId].push(emptyRow(tableId));
+  activelyEditing = false;
   renderAll();
 }
 
