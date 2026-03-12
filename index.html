@@ -5,235 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Orderinvoer Dagrapport</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg:      #0D0F18;
-    --surface: #13151F;
-    --surface2:#1A1D2E;
-    --border:  #1E2235;
-    --muted:   #3A3F5C;
-    --text:    #DDE1F0;
-    --sub:     #6B7299;
-    --blue:    #4F8EF7;
-    --red:     #EF5353;
-    --amber:   #F5A623;
-    --purple:  #9B6DFF;
-    --green:   #34D399;
-    --teal:    #2DD4BF;
-    --pink:    #F472B6;
-  }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-  button { font-family: inherit; cursor: pointer; }
-  input, textarea, select { font-family: inherit; }
-
-  header {
-    position: sticky; top: 0; z-index: 100;
-    background: rgba(13,15,24,0.96); backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 24px;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-  }
-  .brand { display: flex; align-items: center; gap: 12px; }
-  .brand-icon { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(135deg,#4F8EF7,#9B6DFF); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
-  .brand-name { font-weight: 700; font-size: 14px; letter-spacing: -0.02em; }
-  .brand-sub  { font-size: 11px; color: var(--sub); display:flex; align-items:center; gap:5px; margin-top:2px; }
-  .sync-dot   { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; animation: blink 2.5s infinite; }
-  .sync-dot.red   { background:var(--red); animation:none; }
-  .sync-dot.amber { background:var(--amber); animation:none; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
-
-  .header-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-  .btn { border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:500; transition:all .2s; display:inline-flex; align-items:center; gap:5px; }
-  .btn-ghost  { background:var(--surface); border:1px solid var(--border); color:var(--sub); }
-  .btn-ghost:hover { color:var(--text); border-color:var(--muted); }
-  .btn-danger { background:rgba(239,83,83,.1); border:1px solid rgba(239,83,83,.25); color:var(--red); }
-  .btn-danger:hover { background:rgba(239,83,83,.2); }
-  .btn-primary { background:linear-gradient(135deg,#4F8EF7,#6366F1); color:#fff; box-shadow:0 3px 12px rgba(79,142,247,.25); }
-  .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 5px 18px rgba(79,142,247,.4); }
-  .btn-primary:disabled { opacity:.45; cursor:default; transform:none; }
-
-  .meta-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .meta-field { display:flex; align-items:center; gap:8px; font-size:12.5px; }
-  .meta-label { color:var(--sub); white-space:nowrap; }
-  .meta-input { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:4px 10px; font-size:12.5px; color:var(--text); outline:none; transition:border-color .2s; min-width:80px; }
-  .meta-input:focus { border-color:var(--blue); }
-
-  .tabs { display:flex; gap:6px; padding:18px 24px 0; flex-wrap:wrap; }
-  .tab { border:none; border-radius:10px; padding:9px 16px; font-size:13px; font-weight:500; background:var(--surface); border:1px solid var(--border); color:var(--sub); cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:7px; white-space:nowrap; }
-  .tab:hover { color:var(--text); }
-  .tab.active { color:var(--tab-color); background:color-mix(in srgb,var(--tab-color) 12%,transparent); border-color:color-mix(in srgb,var(--tab-color) 35%,transparent); }
-  .tab-badge { font-size:10.5px; font-weight:700; border-radius:5px; padding:1px 6px; background:color-mix(in srgb,var(--tab-color) 20%,transparent); color:var(--tab-color); }
-
-  .table-wrap { padding:16px 24px 28px; }
-  .table-card { background:var(--surface); border-radius:14px; overflow:hidden; border:1px solid var(--border); }
-  .table-card-header { padding:12px 18px; display:flex; align-items:center; gap:9px; border-bottom:1px solid var(--border); }
-  .table-card-title { font-weight:600; font-size:14.5px; }
-
-  .simple-section { padding:14px 18px; }
-  .simple-section textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:9px; color:var(--text); font-size:13.5px; padding:10px 13px; outline:none; resize:vertical; min-height:80px; transition:border-color .2s; }
-  .simple-section textarea:focus { border-color:var(--blue); }
-  .simple-section textarea::placeholder { color:var(--muted); }
-
-  table { width:100%; border-collapse:collapse; }
-  thead th { padding:8px 12px; font-size:10.5px; font-weight:600; color:var(--sub); text-transform:uppercase; letter-spacing:.07em; background:rgba(255,255,255,.02); border-bottom:1px solid var(--border); text-align:left; }
-  tbody tr { border-bottom:1px solid rgba(30,34,53,.7); transition:background .12s; }
-  tbody tr:last-child { border-bottom:none; }
-  tbody tr:hover:not(.locked-row) { background:rgba(255,255,255,.02); }
-  tbody tr:hover:not(.locked-row) .del-btn { opacity:1; }
-  td { padding:2px 2px; vertical-align:middle; }
-  td input { width:100%; background:transparent; border:none; outline:none; color:var(--text); font-size:13px; padding:7px 10px; border-radius:6px; transition:background .12s; }
-  td input:focus { background:rgba(79,142,247,.07); }
-  td input::placeholder { color:var(--muted); }
-  td input:disabled { color:var(--sub); cursor:not-allowed; }
-  .del-btn { opacity:0; background:none; border:none; color:var(--red); font-size:15px; padding:3px 9px; border-radius:5px; cursor:pointer; transition:opacity .12s,background .12s; }
-  .del-btn:hover { background:rgba(239,83,83,.12); }
-  .add-row-btn { width:100%; background:none; border:none; padding:10px 18px; text-align:left; color:var(--muted); font-size:12.5px; cursor:pointer; transition:all .18s; display:flex; align-items:center; gap:6px; border-top:1px solid var(--border); }
-  .add-row-btn:hover { background:rgba(255,255,255,.03); color:var(--text); }
-
-  .locked-row { background:rgba(245,166,35,.04) !important; }
-  .lock-badge { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:var(--amber); background:rgba(245,166,35,.12); border-radius:5px; padding:2px 7px; white-space:nowrap; }
-
-  .conflict-banner { background:rgba(239,83,83,.1); border:1px solid rgba(239,83,83,.3); border-radius:10px; margin:10px 24px 0; padding:11px 16px; font-size:12.5px; color:var(--red); display:none; align-items:center; gap:8px; flex-wrap:wrap; }
-  .conflict-banner button { background:rgba(239,83,83,.2); border:1px solid rgba(239,83,83,.4); border-radius:6px; color:var(--red); font-size:12px; padding:3px 10px; cursor:pointer; }
-  .conflict-banner button.keep { background:rgba(52,211,153,.15); border-color:rgba(52,211,153,.4); color:var(--green); }
-
-  #config-warn { background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.25); border-radius:10px; margin:12px 24px 0; padding:11px 16px; font-size:12.5px; color:var(--amber); display:none; }
-
-  .footer-hint { text-align:center; font-size:11.5px; color:var(--muted); padding:8px 24px 24px; }
-
-  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s; }
-  .modal-overlay.open { opacity:1; pointer-events:all; }
-  .modal { background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:26px; width:340px; transform:translateY(8px); transition:transform .2s; }
-  .modal-overlay.open .modal { transform:translateY(0); }
-  .modal h3 { font-size:16px; font-weight:700; margin-bottom:5px; }
-  .modal p  { font-size:12.5px; color:var(--sub); margin-bottom:16px; line-height:1.5; }
-  .modal input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 13px; font-size:13.5px; color:var(--text); margin-bottom:12px; outline:none; transition:border-color .2s; }
-  .modal input:focus { border-color:var(--blue); }
-  .modal-save { width:100%; background:var(--blue); color:#fff; border:none; border-radius:8px; padding:9px; font-size:13.5px; font-weight:600; cursor:pointer; }
-  .modal-save:hover { opacity:.88; }
-
-  #toast { position:fixed; bottom:24px; right:24px; background:var(--surface2); border:1px solid var(--border); border-radius:11px; padding:12px 18px; font-size:12.5px; color:var(--text); box-shadow:0 8px 28px rgba(0,0,0,.4); transform:translateY(10px); opacity:0; transition:all .28s; pointer-events:none; z-index:300; max-width:320px; line-height:1.5; }
-  #toast.show { transform:translateY(0); opacity:1; }
-  #toast.success { border-color:rgba(52,211,153,.4); }
-  #toast.error   { border-color:rgba(239,83,83,.4); }
-  #toast.warn    { border-color:rgba(245,166,35,.4); }
-
-  .spin { display:inline-block; width:12px; height:12px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-
-  #name-badge { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12.5px; color:var(--sub); cursor:pointer; transition:all .2s; }
-  #name-badge:hover { color:var(--text); border-color:var(--muted); }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0D0F18;--surface:#13151F;--surface2:#1A1D2E;--border:#1E2235;--muted:#3A3F5C;--text:#DDE1F0;--sub:#6B7299;--blue:#4F8EF7;--red:#EF5353;--amber:#F5A623;--green:#34D399}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+button,input,textarea,select{font-family:inherit}
+header{position:sticky;top:0;z-index:100;background:rgba(13,15,24,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#4F8EF7,#9B6DFF);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.brand-name{font-weight:700;font-size:14px}
+.brand-sub{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:5px;margin-top:2px}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:blink 2.5s infinite}
+.sync-dot.red{background:var(--red);animation:none}
+.sync-dot.amber{background:var(--amber);animation:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.header-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.btn{border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:500;transition:all .2s;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.btn-danger{background:rgba(239,83,83,.1);border:1px solid rgba(239,83,83,.25);color:var(--red)}
+.btn-danger:hover{background:rgba(239,83,83,.2)}
+.btn-primary{background:linear-gradient(135deg,#4F8EF7,#6366F1);color:#fff;box-shadow:0 3px 12px rgba(79,142,247,.25)}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 18px rgba(79,142,247,.4)}
+.btn-primary:disabled{opacity:.45;cursor:default;transform:none}
+.meta-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.meta-field{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.meta-label{color:var(--sub);white-space:nowrap}
+.meta-input{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12.5px;color:var(--text);outline:none;transition:border-color .2s;min-width:80px}
+.meta-input:focus{border-color:var(--blue)}
+.tabs{display:flex;gap:6px;padding:18px 24px 0;flex-wrap:wrap}
+.tab{border-radius:10px;padding:9px 16px;font-size:13px;font-weight:500;background:var(--surface);border:1px solid var(--border);color:var(--sub);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--tab-color);background:color-mix(in srgb,var(--tab-color) 12%,transparent);border-color:color-mix(in srgb,var(--tab-color) 35%,transparent)}
+.tab-badge{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;background:color-mix(in srgb,var(--tab-color) 20%,transparent);color:var(--tab-color)}
+.table-wrap{padding:16px 24px 28px}
+.table-card{background:var(--surface);border-radius:14px;overflow:hidden;border:1px solid var(--border)}
+.table-card-header{padding:12px 18px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border)}
+.table-card-title{font-weight:600;font-size:14.5px}
+.simple-section{padding:14px 18px}
+.simple-section textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:13.5px;padding:10px 13px;outline:none;resize:vertical;min-height:80px;transition:border-color .2s}
+.simple-section textarea:focus{border-color:var(--blue)}
+.simple-section textarea::placeholder{color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 12px;font-size:10.5px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border);text-align:left}
+tbody tr{border-bottom:1px solid rgba(30,34,53,.7)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover .del-btn{opacity:1}
+td{padding:2px;vertical-align:middle}
+td input{width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;padding:7px 10px;border-radius:6px;transition:background .12s}
+td input:focus{background:rgba(79,142,247,.07)}
+td input::placeholder{color:var(--muted)}
+.del-btn{opacity:0;background:none;border:none;color:var(--red);font-size:15px;padding:3px 9px;border-radius:5px;cursor:pointer;transition:opacity .12s}
+.del-btn:hover{background:rgba(239,83,83,.12)}
+.add-row-btn{width:100%;background:none;border:none;padding:10px 18px;text-align:left;color:var(--muted);font-size:12.5px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:6px;border-top:1px solid var(--border)}
+.add-row-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
+#config-warn{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:10px;margin:12px 24px 0;padding:11px 16px;font-size:12.5px;color:var(--amber);display:none}
+.footer-hint{text-align:center;font-size:11.5px;color:var(--muted);padding:8px 24px 24px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:26px;width:340px}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:5px}
+.modal p{font-size:12.5px;color:var(--sub);margin-bottom:16px;line-height:1.5}
+.modal input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13.5px;color:var(--text);margin-bottom:12px;outline:none}
+.modal input:focus{border-color:var(--blue)}
+.modal-save{width:100%;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:9px;font-size:13.5px;font-weight:600;cursor:pointer}
+#toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 18px;font-size:12.5px;color:var(--text);box-shadow:0 8px 28px rgba(0,0,0,.4);transform:translateY(10px);opacity:0;transition:all .28s;pointer-events:none;z-index:300;max-width:320px}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{border-color:rgba(52,211,153,.4)}
+#toast.error{border-color:rgba(239,83,83,.4)}
+#toast.warn{border-color:rgba(245,166,35,.4)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+#name-badge{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12.5px;color:var(--sub);cursor:pointer}
+#name-badge:hover{color:var(--text);border-color:var(--muted)}
 </style>
 </head>
 <body>
 
+<!-- ══ CONFIGURATION ══════════════════════════════════════════ -->
 <script>
-// ══════════════════════════════════════════════════════════════
-//  🔧 CONFIGURATION — paste your Supabase details here
-// ══════════════════════════════════════════════════════════════
 const SUPABASE_URL = "https://qlcxsgvkrnxhpsjcguok.supabase.co";
 const SUPABASE_KEY = "sb_publishable_6WSJoSx_Str7088UT3NyHw_yal-THW0";
-
-// Power Automate HTTP trigger URL (for sending the email)
 const PA_TRIGGER_URL = "https://default057b68203f6c4bfbbed4178db3a988.03.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8ec8f884c5744deba85fbf6a32048718/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Dize9v1xATQzqUooWtEGsiM_xGZqYsaCgA5WbMzsVcE";
 
-// ── Tables definition ─────────────────────────────────────────
 const TABLES = [
-  {
-    id: "bijzonderheden",
-    label: "Bijzonderheden",
-    icon: "📋",
-    color: "#4F8EF7",
-    cols: [
-      { key: "klantnaam",      label: "Klantnaam",      w: 160 },
-      { key: "bijzonderheden", label: "Bijzonderheden",  w: null },
-      { key: "wie",            label: "Wie",             w: 60  },
-      { key: "afgewerkt",      label: "Afgewerkt",       w: 90  },
-    ]
-  },
-  {
-    id: "speciaal",
-    label: "Speciaal verzoek",
-    icon: "⭐",
-    color: "#F5A623",
-    cols: [
-      { key: "klantnaam",  label: "Klantnaam",         w: 160 },
-      { key: "verzoek",    label: "Speciaal verzoek",  w: null },
-      { key: "wie",        label: "Wie",               w: 60  },
-      { key: "afgewerkt",  label: "Afgewerkt",         w: 90  },
-    ]
-  },
-  {
-    id: "invoeren",
-    label: "Nog in te voeren",
-    icon: "✏️",
-    color: "#9B6DFF",
-    cols: [
-      { key: "naam",       label: "Naam + Deb.nr.",                              w: 160 },
-      { key: "artikel",    label: "Artikelomschrijving + art.nr. + aantal + reden", w: null },
-      { key: "wie",        label: "Wie",                                         w: 60  },
-      { key: "afgewerkt",  label: "Afgewerkt",                                   w: 90  },
-    ]
-  },
-  {
-    id: "levertijden",
-    label: "Levertijden",
-    icon: "🕐",
-    color: "#2DD4BF",
-    cols: [
-      { key: "klantnaam",  label: "Klantnaam",   w: 160 },
-      { key: "levertijd",  label: "Levertijden", w: null },
-      { key: "wie",        label: "Wie",         w: 60  },
-      { key: "afgewerkt",  label: "Afgewerkt",   w: 90  },
-    ]
-  },
-  {
-    id: "ophalen",
-    label: "Op laten halen",
-    icon: "🚚",
-    color: "#F472B6",
-    cols: [
-      { key: "klantnaam",  label: "Klantnaam",                          w: 160 },
-      { key: "actie",      label: "Op laten halen / weg laten brengen", w: null },
-      { key: "wie",        label: "Wie",                                w: 60  },
-      { key: "afgewerkt",  label: "Afgewerkt",                          w: 90  },
-    ]
-  },
-  {
-    id: "geannuleerd",
-    label: "Geannuleerde bestellingen",
-    icon: "❌",
-    color: "#EF5353",
-    cols: [
-      { key: "klantnaam",  label: "Klantnaam",               w: 160 },
-      { key: "bestelling", label: "Geannuleerde bestelling",  w: null },
-      { key: "wie",        label: "Wie",                     w: 60  },
-      { key: "datum",      label: "Datum",                   w: 90  },
-    ]
-  },
-  { id: "onder150",   label: "Onder €150",       icon: "💶", color: "#34D399", simple: true },
-  { id: "na0000",     label: "Na 00:00 besteld", icon: "🌙", color: "#6B7299", simple: true },
-  { id: "onboarding", label: "Onboarding",       icon: "🆕", color: "#4F8EF7", simple: true },
+  { id:"bijzonderheden", label:"Bijzonderheden",           icon:"📋", color:"#4F8EF7",
+    cols:[{key:"klantnaam",label:"Klantnaam",w:160},{key:"bijzonderheden",label:"Bijzonderheden",w:null},{key:"wie",label:"Wie",w:60},{key:"afgewerkt",label:"Afgewerkt",w:90}] },
+  { id:"speciaal",       label:"Speciaal verzoek",          icon:"⭐", color:"#F5A623",
+    cols:[{key:"klantnaam",label:"Klantnaam",w:160},{key:"verzoek",label:"Speciaal verzoek",w:null},{key:"wie",label:"Wie",w:60},{key:"afgewerkt",label:"Afgewerkt",w:90}] },
+  { id:"invoeren",       label:"Nog in te voeren",          icon:"✏️", color:"#9B6DFF",
+    cols:[{key:"naam",label:"Naam + Deb.nr.",w:160},{key:"artikel",label:"Artikelomschrijving + art.nr. + aantal + reden",w:null},{key:"wie",label:"Wie",w:60},{key:"afgewerkt",label:"Afgewerkt",w:90}] },
+  { id:"levertijden",    label:"Levertijden",               icon:"🕐", color:"#2DD4BF",
+    cols:[{key:"klantnaam",label:"Klantnaam",w:160},{key:"levertijd",label:"Levertijden",w:null},{key:"wie",label:"Wie",w:60},{key:"afgewerkt",label:"Afgewerkt",w:90}] },
+  { id:"ophalen",        label:"Op laten halen",            icon:"🚚", color:"#F472B6",
+    cols:[{key:"klantnaam",label:"Klantnaam",w:160},{key:"actie",label:"Op laten halen / weg laten brengen",w:null},{key:"wie",label:"Wie",w:60},{key:"afgewerkt",label:"Afgewerkt",w:90}] },
+  { id:"geannuleerd",    label:"Geannuleerde bestellingen", icon:"❌", color:"#EF5353",
+    cols:[{key:"klantnaam",label:"Klantnaam",w:160},{key:"bestelling",label:"Geannuleerde bestelling",w:null},{key:"wie",label:"Wie",w:60},{key:"datum",label:"Datum",w:90}] },
+  { id:"onder150",   label:"Onder €150",       icon:"💶", color:"#34D399", simple:true },
+  { id:"na0000",     label:"Na 00:00 besteld", icon:"🌙", color:"#6B7299", simple:true },
+  { id:"onboarding", label:"Onboarding",       icon:"🆕", color:"#4F8EF7", simple:true },
 ];
-// ══════════════════════════════════════════════════════════════
 </script>
+<!-- ══════════════════════════════════════════════════════════ -->
 
-<div id="config-warn">⚠️ <strong>Setup vereist:</strong> open index.html en vul jouw Supabase URL, API key en Power Automate URL in.</div>
-<div class="conflict-banner" id="conflict-banner"></div>
+<div id="config-warn">⚠️ <strong>Setup vereist:</strong> vul jouw Supabase URL, API key en Power Automate URL in.</div>
 
 <header>
   <div class="brand">
     <div class="brand-icon">📨</div>
     <div>
       <div class="brand-name">Orderinvoer Dagrapport</div>
-      <div class="brand-sub">
-        <span class="sync-dot amber" id="sync-dot"></span>
-        <span id="sync-label">Verbinden…</span>
-      </div>
+      <div class="brand-sub"><span class="sync-dot amber" id="sync-dot"></span><span id="sync-label">Verbinden…</span></div>
     </div>
   </div>
   <div class="header-actions">
-    <span id="entry-count" style="font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;">0 items</span>
+    <span id="entry-count" style="font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px">0 items</span>
     <button id="name-badge" onclick="openNameModal()">👤 Naam instellen</button>
     <button class="btn btn-danger" onclick="clearAll()">🗑 Alles wissen</button>
     <button class="btn btn-primary" id="send-btn" onclick="handleSend()" disabled>
@@ -243,8 +126,8 @@ const TABLES = [
 </header>
 
 <div class="meta-bar">
-  <div class="meta-field"><span class="meta-label">Datum:</span><input class="meta-input" id="meta-datum" placeholder="dd-mm-jjjj" style="width:110px"/></div>
-  <div class="meta-field"><span class="meta-label">Orderinvoer avond (naam):</span><input class="meta-input" id="meta-naam" placeholder="Naam" style="width:120px"/></div>
+  <div class="meta-field"><span class="meta-label">Datum:</span><input class="meta-input" id="meta-datum" style="width:110px"/></div>
+  <div class="meta-field"><span class="meta-label">Naam avond:</span><input class="meta-input" id="meta-naam" style="width:120px"/></div>
   <div class="meta-field"><span class="meta-label">Aanvangstijd:</span><input class="meta-input" id="meta-tijd" placeholder="00:00" style="width:70px"/></div>
   <div class="meta-field"><span class="meta-label">E-mails/InOne:</span><input class="meta-input" id="meta-emails" placeholder="0" style="width:60px"/></div>
   <div class="meta-field"><span class="meta-label">Webshop TR:</span><input class="meta-input" id="meta-wstr" placeholder="0" style="width:60px"/></div>
@@ -254,343 +137,359 @@ const TABLES = [
 
 <div class="tabs" id="tab-bar"></div>
 <div class="table-wrap" id="table-area"></div>
-<div class="footer-hint">Live synchronisatie via Supabase · vernieuwd elke 5 seconden · Data reset automatisch elke dag</div>
+<div class="footer-hint">Live synchronisatie · Data reset automatisch elke dag</div>
 
 <div class="modal-overlay" id="name-modal">
   <div class="modal">
     <h3>Jouw naam</h3>
-    <p>Dit vult automatisch de kolom "Wie" in, zodat collega's weten wie welke invoer heeft gedaan.</p>
-    <input type="text" id="name-input" placeholder="bijv. KH" onkeydown="if(event.key==='Enter') saveName()"/>
+    <p>Vult automatisch de kolom "Wie" in.</p>
+    <input type="text" id="name-input" placeholder="bijv. KH" onkeydown="if(event.key==='Enter')saveName()"/>
     <button class="modal-save" onclick="saveName()">Opslaan</button>
   </div>
 </div>
-
 <div id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-// ── Init Supabase ─────────────────────────────────────────────
+// ── Setup ─────────────────────────────────────────────────────
 const configOk = SUPABASE_URL !== "PASTE_YOUR_SUPABASE_URL_HERE" && SUPABASE_KEY !== "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
 if (!configOk) document.getElementById("config-warn").style.display = "block";
+let sb = configOk ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-let sb = null;
-if (configOk) sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// ── State ─────────────────────────────────────────────────────
-// data[tableId] = array of row objects (for table types)
-//               = [string] (for simple types)
-let data      = {};
-let locks     = {};
+// ── Core state — this is the single source of truth ───────────
+// Never overwrite this from Supabase if a row exists locally
+let rows = {};   // rows[tableId] = Map(localId -> rowObj)
+let simples = {}; // simples[tableId] = string
 let activeTab = TABLES[0].id;
-let yourName  = localStorage.getItem("handover-name") || "";
-let metaTimer = null;
+let yourName = localStorage.getItem("handover-name") || "";
 
-function uuid()      { return crypto.randomUUID(); }
-function todayStr()  { return new Date().toISOString().slice(0,10); }
-function todayNL()   { return new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"}); }
-function emptyRow(tid) {
-  const t = TABLES.find(x=>x.id===tid);
-  const r = { localId: uuid(), dbId: null };
-  if (t && !t.simple) t.cols.forEach(c => r[c.key]="");
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function todayNL()  { return new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+function uid()      { return crypto.randomUUID(); }
+
+function getTableDef(id) { return TABLES.find(t=>t.id===id); }
+
+// Init state
+function initState() {
+  TABLES.forEach(t => {
+    if (t.simple) {
+      simples[t.id] = "";
+    } else {
+      rows[t.id] = new Map();
+      // Add 3 empty rows
+      for (let i=0; i<3; i++) {
+        const id = uid();
+        rows[t.id].set(id, makeRow(t.id, id));
+      }
+    }
+  });
+}
+
+function makeRow(tid, localId) {
+  const t = getTableDef(tid);
+  const r = { localId, dbId: null, dirty: false };
+  t.cols.forEach(c => r[c.key] = "");
   return r;
 }
-function freshData() { return Object.fromEntries(TABLES.map(t=>[t.id, t.simple?[""]:[ emptyRow(t.id),emptyRow(t.id),emptyRow(t.id) ]])); }
 
-// ── Supabase helpers ──────────────────────────────────────────
-async function sbGet(table, filters={}) {
-  let q = sb.from(table).select("*");
-  Object.entries(filters).forEach(([k,v])=>{ q=q.eq(k,v); });
-  const {data,error} = await q;
-  if (error) throw error;
-  return data;
-}
-async function sbInsert(table, row) {
-  const {data,error} = await sb.from(table).insert(row).select().single();
-  if (error) throw error;
-  return data;
-}
-async function sbUpdate(table, id, row) {
-  const {error} = await sb.from(table).update(row).eq("id",id);
-  if (error) throw error;
-}
-async function sbUpsert(table, row, conflict) {
-  const {error} = await sb.from(table).upsert(row,{onConflict:conflict});
-  if (error) throw error;
-}
-async function sbDelete(table, id) {
-  const {error} = await sb.from(table).delete().eq("id",id);
-  if (error) throw error;
+function rowHasData(tid, row) {
+  const t = getTableDef(tid);
+  return t && t.cols.some(c => (row[c.key]||"").trim());
 }
 
-// ── Load from Supabase (background, never disrupts typing) ────
+// ── Supabase ──────────────────────────────────────────────────
+async function saveRowToDb(tid, row) {
+  if (!sb || !rowHasData(tid, row)) return;
+  const t = getTableDef(tid);
+  const rowData = {};
+  t.cols.forEach(c => rowData[c.key] = row[c.key]||"");
+  const payload = { table_id: tid, row_data: rowData, handover_date: todayStr(), local_id: row.localId };
+  try {
+    if (row.dbId) {
+      await sb.from("handover_entries").update(payload).eq("id", row.dbId);
+    } else {
+      const {data, error} = await sb.from("handover_entries").insert(payload).select().single();
+      if (!error && data) row.dbId = data.id;
+    }
+    row.dirty = false;
+    setSyncStatus("ok");
+  } catch(e) { setSyncStatus("error"); }
+}
+
+async function saveSimpleToDb(tid, value) {
+  if (!sb) return;
+  try {
+    const {data: ex} = await sb.from("handover_entries").select("id").eq("handover_date", todayStr()).eq("table_id", tid);
+    if (ex && ex.length) {
+      await sb.from("handover_entries").update({row_data:{text:value}}).eq("id", ex[0].id);
+    } else {
+      await sb.from("handover_entries").insert({table_id:tid, row_data:{text:value}, handover_date:todayStr(), local_id:tid});
+    }
+  } catch(e) {}
+}
+
+async function saveMetaToDb(m) {
+  if (!sb) return;
+  try {
+    const {data: ex} = await sb.from("handover_entries").select("id").eq("handover_date", todayStr()).eq("table_id", "_meta");
+    if (ex && ex.length) await sb.from("handover_entries").update({row_data:m}).eq("id", ex[0].id);
+    else await sb.from("handover_entries").insert({table_id:"_meta", row_data:m, handover_date:todayStr(), local_id:"_meta"});
+  } catch(e) {}
+}
+
+// Background sync — ONLY adds rows from other users, never overwrites local data
 async function bgSync() {
   if (!sb) return;
-  // Don't sync if any input is focused
-  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
-  if (document.activeElement && document.activeElement.tagName === "TEXTAREA") return;
   try {
-    const rows = await sbGet("handover_entries", { handover_date: todayStr() });
-    const fresh = freshData();
-    rows.forEach(item => {
+    const {data: dbRows, error} = await sb.from("handover_entries").select("*").eq("handover_date", todayStr());
+    if (error) throw error;
+
+    let changed = false;
+    dbRows.forEach(item => {
       const tid = item.table_id;
-      if (tid === "_meta") { applyMeta(item.row_data); return; }
-      const t = TABLES.find(x=>x.id===tid);
+      if (tid === "_meta") return; // skip meta for now
+      const t = getTableDef(tid);
       if (!t) return;
-      if (t.simple) { fresh[tid] = [item.row_data?.text||""]; return; }
-      if (fresh[tid].every(r=>!r.dbId)) fresh[tid]=[];
-      fresh[tid].push({...item.row_data, dbId:item.id, localId:item.local_id||item.id});
+
+      if (t.simple) {
+        // Only update simple if textarea not focused
+        const ta = document.getElementById("simple-ta-"+tid);
+        if (!ta || document.activeElement !== ta) {
+          const newVal = item.row_data?.text || "";
+          if (simples[tid] !== newVal) { simples[tid] = newVal; changed = true; }
+        }
+        return;
+      }
+
+      // For table rows: only add rows we don't have locally
+      const localId = item.local_id || item.id;
+      if (!rows[tid]) rows[tid] = new Map();
+      if (!rows[tid].has(localId)) {
+        // New row from another user — add it
+        const rowData = { localId, dbId: item.id, dirty: false };
+        t.cols.forEach(c => rowData[c.key] = item.row_data?.[c.key] || "");
+        rows[tid].set(localId, rowData);
+        changed = true;
+      } else {
+        // Row exists locally — update dbId if missing, but don't overwrite values
+        const localRow = rows[tid].get(localId);
+        if (!localRow.dbId) { localRow.dbId = item.id; }
+      }
     });
-    TABLES.forEach(t=>{ if(!t.simple) while(fresh[t.id].length<3) fresh[t.id].push(emptyRow(t.id)); });
-    data = fresh;
-    // Load locks
-    const cutoff = new Date(Date.now()-30000).toISOString();
-    const {data:lockRows} = await sb.from("handover_locks").select("*").gte("lock_time",cutoff);
-    locks={};
-    (lockRows||[]).forEach(l=>{ locks[l.row_key]={name:l.locked_by}; });
+
+    if (changed) renderAll();
     setSyncStatus("ok");
-    renderAll();
   } catch(e) {
     console.error(e);
     setSyncStatus("error");
   }
 }
 
-function applyMeta(m) {
-  if (!m) return;
-  const fields = {datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
-  Object.entries(fields).forEach(([k,id])=>{ if(m[k] && document.activeElement?.id!==id) document.getElementById(id).value=m[k]||""; });
+// ── Save timers per row ───────────────────────────────────────
+const saveTimers = {};
+function scheduleSave(tid, row) {
+  setSyncStatus("loading");
+  clearTimeout(saveTimers[row.localId]);
+  saveTimers[row.localId] = setTimeout(() => saveRowToDb(tid, row), 900);
 }
 
-// ── Save helpers ──────────────────────────────────────────────
-async function saveRow(tableId, row) {
-  if (!sb) return;
-  const t = TABLES.find(x=>x.id===tableId);
-  if (!t||t.simple) return;
-  if (t.cols.every(c=>!(row[c.key]||"").trim())) return;
-  const rowData={};
-  t.cols.forEach(c=>rowData[c.key]=row[c.key]||"");
-  const payload={table_id:tableId,row_data:rowData,handover_date:todayStr(),local_id:row.localId};
-  try {
-    if (row.dbId) { await sbUpdate("handover_entries",row.dbId,payload); }
-    else { const ins=await sbInsert("handover_entries",payload); row.dbId=ins.id; }
-    setSyncStatus("ok");
-  } catch(e) { setSyncStatus("error"); }
+// ── Render ────────────────────────────────────────────────────
+function setSyncStatus(s) {
+  const dot = document.getElementById("sync-dot");
+  const lbl = document.getElementById("sync-label");
+  if (s==="ok")      { dot.className="sync-dot"; lbl.textContent="Live gesynchroniseerd"; }
+  else if (s==="error") { dot.className="sync-dot red"; lbl.textContent="Synchronisatiefout"; }
+  else               { dot.className="sync-dot amber"; lbl.textContent="Synchroniseren…"; }
 }
 
-async function saveSimple(tableId, value) {
-  if (!sb) return;
-  try {
-    const ex=await sbGet("handover_entries",{handover_date:todayStr(),table_id:tableId});
-    if (ex.length) await sbUpdate("handover_entries",ex[0].id,{row_data:{text:value}});
-    else await sbInsert("handover_entries",{table_id:tableId,row_data:{text:value},handover_date:todayStr(),local_id:tableId});
-  } catch(e) {}
-}
-
-async function saveMeta(m) {
-  if (!sb) return;
-  try {
-    const ex=await sbGet("handover_entries",{handover_date:todayStr(),table_id:"_meta"});
-    if (ex.length) await sbUpdate("handover_entries",ex[0].id,{row_data:m});
-    else await sbInsert("handover_entries",{table_id:"_meta",row_data:m,handover_date:todayStr(),local_id:"_meta"});
-  } catch(e) {}
-}
-
-async function writeLock(tableId, localId) {
-  if (!sb||!yourName) return;
-  try { await sbUpsert("handover_locks",{row_key:tableId+"_"+localId,locked_by:yourName,lock_time:new Date().toISOString()},"row_key"); } catch(e) {}
-}
-async function releaseLock(tableId, localId) {
-  if (!sb) return;
-  try { const r=await sbGet("handover_locks",{row_key:tableId+"_"+localId}); if(r.length&&r[0].locked_by===yourName) await sbDelete("handover_locks",r[0].id); } catch(e) {}
-}
-
-// ── Sync status ───────────────────────────────────────────────
-function setSyncStatus(state) {
-  const dot=document.getElementById("sync-dot"), lbl=document.getElementById("sync-label");
-  const map={ok:["sync-dot","Live gesynchroniseerd"],error:["sync-dot red","Synchronisatiefout"],loading:["sync-dot amber","Synchroniseren…"]};
-  const [cls,txt]=map[state]||map.ok;
-  dot.className=cls; lbl.textContent=txt;
-}
-
-// ── Render — ONLY called when not typing ──────────────────────
-function renderAll() {
-  if (document.activeElement && (document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA")) return;
-  renderTabs(); renderTable(); updateEntryCount();
-}
+function renderAll() { renderTabs(); renderTable(); updateCount(); }
 
 function renderTabs() {
-  document.getElementById("tab-bar").innerHTML = TABLES.map(t=>{
-    const count = t.simple ? ((data[t.id]||[""])[0].trim()?1:0)
-                           : (data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length;
-    const active = t.id===activeTab?"active":"";
+  document.getElementById("tab-bar").innerHTML = TABLES.map(t => {
+    const count = t.simple
+      ? (simples[t.id]?.trim() ? 1 : 0)
+      : [...(rows[t.id]||new Map()).values()].filter(r => rowHasData(t.id, r)).length;
+    const active = t.id === activeTab ? "active" : "";
     return `<button class="tab ${active}" style="--tab-color:${t.color}" onclick="switchTab('${t.id}')">
-      <span>${t.icon}</span><span>${t.label}</span>
-      ${count?`<span class="tab-badge">${count}</span>`:""}
+      ${t.icon} ${t.label}${count ? ` <span class="tab-badge">${count}</span>` : ""}
     </button>`;
   }).join("");
 }
 
 function renderTable() {
-  const t = TABLES.find(x=>x.id===activeTab);
+  const t = getTableDef(activeTab);
   if (!t) return;
+
+  const hdr = `<div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
+    <span style="font-size:19px">${t.icon}</span>
+    <span class="table-card-title" style="color:${t.color}">${t.label}</span>
+  </div>`;
+
   if (t.simple) {
-    document.getElementById("table-area").innerHTML=`
-      <div class="table-card">
-        <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
-          <span style="font-size:19px">${t.icon}</span>
-          <span class="table-card-title" style="color:${t.color}">${t.label}</span>
-        </div>
-        <div class="simple-section">
-          <textarea id="simple-ta" placeholder="Voer hier klanten in…" oninput="onSimpleInput('${t.id}',this.value)">${esc((data[t.id]||[""])[0])}</textarea>
-        </div>
-      </div>`;
+    document.getElementById("table-area").innerHTML = `<div class="table-card">${hdr}
+      <div class="simple-section">
+        <textarea id="simple-ta-${t.id}" placeholder="Voer hier klanten in…">${esc(simples[t.id]||"")}</textarea>
+      </div></div>`;
+    const ta = document.getElementById("simple-ta-"+t.id);
+    ta.addEventListener("input", () => {
+      simples[t.id] = ta.value;
+      updateCount();
+      clearTimeout(window._st);
+      window._st = setTimeout(() => saveSimpleToDb(t.id, ta.value), 900);
+    });
     return;
   }
-  const rows=data[t.id]||[];
-  const thCells=t.cols.map(c=>`<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("")+`<th style="width:36px"></th>`;
-  const tbRows=rows.map((row,ri)=>{
-    const lockKey=t.id+"_"+row.localId;
-    const lock=locks[lockKey];
-    const isLocked=lock&&lock.name!==yourName;
-    const tds=t.cols.map((c,ci)=>{
-      if (isLocked) return ci===0
-        ? `<td><div style="padding:7px 10px;font-size:13px;display:flex;align-items:center;gap:8px;">${esc(row[c.key]||"")}<span class="lock-badge">🔒 ${esc(lock.name)}</span></div></td>`
-        : `<td><input value="${esc(row[c.key]||"")}" disabled/></td>`;
-      const ph=c.key==="wie"&&yourName?yourName:c.label+"…";
+
+  const rowList = [...(rows[t.id]||new Map()).values()];
+  const ths = t.cols.map(c=>`<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("") + `<th style="width:36px"></th>`;
+  const trs = rowList.map(row => {
+    const cells = t.cols.map(c => {
+      const ph = c.key==="wie" && yourName ? yourName : c.label+"…";
       return `<td><input
-        data-tid="${t.id}" data-lid="${row.localId}" data-col="${c.key}"
-        value="${esc(row[c.key]||"")}" placeholder="${ph}"
+        type="text"
+        value="${esc(row[c.key]||"")}"
+        placeholder="${ph}"
+        data-tid="${t.id}"
+        data-lid="${row.localId}"
+        data-col="${c.key}"
       /></td>`;
     }).join("");
-    return `<tr class="${isLocked?"locked-row":""}" data-lid="${row.localId}">${tds}<td style="text-align:center">
-      ${isLocked?"":` <button class="del-btn" onclick="deleteRow('${t.id}','${row.localId}')" title="Verwijder">×</button>`}
-    </td></tr>`;
+    return `<tr>
+      ${cells}
+      <td style="text-align:center"><button class="del-btn" data-tid="${t.id}" data-lid="${row.localId}">×</button></td>
+    </tr>`;
   }).join("");
 
-  document.getElementById("table-area").innerHTML=`
-    <div class="table-card">
-      <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
-        <span style="font-size:19px">${t.icon}</span>
-        <span class="table-card-title" style="color:${t.color}">${t.label}</span>
-      </div>
-      <table><thead><tr>${thCells}</tr></thead><tbody id="active-tbody">${tbRows}</tbody></table>
-      <button class="add-row-btn" onclick="addRow('${t.id}')">＋ Rij toevoegen</button>
-    </div>`;
+  document.getElementById("table-area").innerHTML = `<div class="table-card">${hdr}
+    <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+    <button class="add-row-btn" id="add-row-btn">＋ Rij toevoegen</button>
+  </div>`;
 
-  // Attach events via JS (not inline) so they are stable
-  document.querySelectorAll("#active-tbody input").forEach(input=>{
-    input.addEventListener("focus", onInputFocus);
-    input.addEventListener("blur",  onInputBlur);
-    input.addEventListener("input", onInputChange);
+  // Attach events — stable, no inline handlers
+  document.querySelectorAll("#table-area input[data-lid]").forEach(inp => {
+    inp.addEventListener("focus", onCellFocus);
+    inp.addEventListener("input", onCellInput);
+    inp.addEventListener("blur",  onCellBlur);
   });
+  document.querySelectorAll(".del-btn[data-lid]").forEach(btn => {
+    btn.addEventListener("click", () => deleteRow(btn.dataset.tid, btn.dataset.lid));
+  });
+  document.getElementById("add-row-btn").addEventListener("click", () => addRow(t.id));
 }
 
-function updateEntryCount() {
-  const total=TABLES.reduce((sum,t)=>{
-    if (t.simple) return sum+((data[t.id]||[""])[0].trim()?1:0);
-    return sum+(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length;
-  },0);
-  document.getElementById("entry-count").textContent=`${total} items`;
-  document.getElementById("send-btn").disabled=total===0||!configOk;
+function updateCount() {
+  const total = TABLES.reduce((s,t) => {
+    if (t.simple) return s + (simples[t.id]?.trim() ? 1 : 0);
+    return s + [...(rows[t.id]||new Map()).values()].filter(r=>rowHasData(t.id,r)).length;
+  }, 0);
+  document.getElementById("entry-count").textContent = total+" items";
+  document.getElementById("send-btn").disabled = total===0 || !configOk;
 }
 
-// ── Input event handlers (attached via JS, not inline HTML) ──
-function onInputFocus(e) {
-  const {tid,lid,col} = e.target.dataset;
-  if (!tid) return;
-  const row=(data[tid]||[]).find(r=>r.localId===lid);
-  if (!row) return;
-  // Auto-fill Wie
+// ── Cell events ───────────────────────────────────────────────
+function onCellFocus(e) {
+  const {tid, lid, col} = e.target.dataset;
   if (col==="wie" && !e.target.value && yourName) {
-    e.target.value=yourName;
-    row[col]=yourName;
-    scheduleSave(tid, row);
+    e.target.value = yourName;
+    const row = rows[tid]?.get(lid);
+    if (row) { row[col] = yourName; scheduleSave(tid, row); }
   }
-  writeLock(tid, lid);
 }
 
-function onInputBlur(e) {
-  const {tid,lid,col} = e.target.dataset;
-  if (!tid) return;
-  const row=(data[tid]||[]).find(r=>r.localId===lid);
-  if (row) row[col]=e.target.value;
-  releaseLock(tid, lid);
-  updateEntryCount();
-}
-
-function onInputChange(e) {
-  const {tid,lid,col} = e.target.dataset;
-  if (!tid) return;
-  const row=(data[tid]||[]).find(r=>r.localId===lid);
+function onCellInput(e) {
+  const {tid, lid, col} = e.target.dataset;
+  const row = rows[tid]?.get(lid);
   if (!row) return;
-  row[col]=e.target.value;  // update state immediately
+  row[col] = e.target.value;
+  row.dirty = true;
+  updateCount();
   scheduleSave(tid, row);
 }
 
-const saveTimers={};
-function scheduleSave(tid, row) {
-  setSyncStatus("loading");
-  clearTimeout(saveTimers[row.localId]);
-  saveTimers[row.localId]=setTimeout(()=>saveRow(tid,row), 1000);
+function onCellBlur(e) {
+  const {tid, lid, col} = e.target.dataset;
+  const row = rows[tid]?.get(lid);
+  if (row) row[col] = e.target.value; // capture final value
 }
 
-function onSimpleInput(tid, value) {
-  if (!data[tid]) data[tid]=[""];
-  data[tid][0]=value;
-  updateEntryCount();
-  clearTimeout(window._simpleTimer);
-  window._simpleTimer=setTimeout(()=>saveSimple(tid,value),1000);
-}
-
-// ── Tab switching ─────────────────────────────────────────────
+// ── Tab / row management ──────────────────────────────────────
 function switchTab(id) {
-  activeTab=id;
-  renderTabs(); renderTable(); updateEntryCount();
+  activeTab = id;
+  renderAll();
 }
 
-// ── Add / delete row ──────────────────────────────────────────
 function addRow(tid) {
-  if (!data[tid]) data[tid]=[];
-  data[tid].push(emptyRow(tid));
-  renderTabs(); renderTable(); updateEntryCount();
+  const id = uid();
+  if (!rows[tid]) rows[tid] = new Map();
+  rows[tid].set(id, makeRow(tid, id));
+  // Append a single row to the existing tbody — don't re-render whole table
+  const t = getTableDef(tid);
+  const tbody = document.querySelector("#table-area tbody");
+  if (!tbody) { renderTable(); return; }
+  const row = rows[tid].get(id);
+  const cells = t.cols.map(c => {
+    const ph = c.key==="wie" && yourName ? yourName : c.label+"…";
+    return `<td><input type="text" value="" placeholder="${ph}" data-tid="${tid}" data-lid="${id}" data-col="${c.key}"/></td>`;
+  }).join("");
+  const tr = document.createElement("tr");
+  tr.innerHTML = cells + `<td style="text-align:center"><button class="del-btn" data-tid="${tid}" data-lid="${id}">×</button></td>`;
+  tbody.appendChild(tr);
+  // Attach events to new inputs
+  tr.querySelectorAll("input[data-lid]").forEach(inp => {
+    inp.addEventListener("focus", onCellFocus);
+    inp.addEventListener("input", onCellInput);
+    inp.addEventListener("blur",  onCellBlur);
+  });
+  tr.querySelector(".del-btn").addEventListener("click", () => deleteRow(tid, id));
+  // Focus first cell
+  tr.querySelector("input")?.focus();
 }
 
 async function deleteRow(tid, lid) {
-  const row=(data[tid]||[]).find(r=>r.localId===lid);
-  if (row) { await releaseLock(tid,lid); if(row.dbId&&sb) await sbDelete("handover_entries",row.dbId); }
-  data[tid]=(data[tid]||[]).filter(r=>r.localId!==lid);
-  const t=TABLES.find(x=>x.id===tid);
-  if (t&&!t.simple&&!(data[tid]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length)
-    data[tid]=[emptyRow(tid),emptyRow(tid),emptyRow(tid)];
-  renderTabs(); renderTable(); updateEntryCount();
+  const row = rows[tid]?.get(lid);
+  if (row?.dbId && sb) {
+    try { await sb.from("handover_entries").delete().eq("id", row.dbId); } catch(e) {}
+  }
+  rows[tid]?.delete(lid);
+  // Ensure at least 3 empty rows
+  const t = getTableDef(tid);
+  if (t && !t.simple) {
+    const filled = [...(rows[tid]||new Map()).values()].filter(r=>rowHasData(tid,r)).length;
+    const total  = (rows[tid]||new Map()).size;
+    while ((rows[tid]||new Map()).size < 3) {
+      const id = uid();
+      rows[tid].set(id, makeRow(tid, id));
+    }
+  }
+  renderAll();
 }
 
 async function clearAll() {
   if (!confirm("Alle invoer van vandaag wissen? Dit geldt voor iedereen.")) return;
-  if (sb) try { await sb.from("handover_entries").delete().eq("handover_date",todayStr()); } catch(e) {}
-  data=freshData(); renderAll();
-  showToast("Alle invoer gewist.","");
+  if (sb) try { await sb.from("handover_entries").delete().eq("handover_date", todayStr()); } catch(e) {}
+  initState();
+  renderAll();
+  showToast("Alle invoer gewist.", "");
 }
 
 // ── Name modal ────────────────────────────────────────────────
 function openNameModal() {
-  document.getElementById("name-input").value=yourName;
+  document.getElementById("name-input").value = yourName;
   document.getElementById("name-modal").classList.add("open");
-  setTimeout(()=>document.getElementById("name-input").focus(),100);
+  setTimeout(()=>document.getElementById("name-input").focus(), 100);
 }
 function saveName() {
-  const v=document.getElementById("name-input").value.trim();
-  yourName=v; localStorage.setItem("handover-name",v);
-  document.getElementById("name-badge").textContent=v?`👤 ${v}`:"👤 Naam instellen";
+  yourName = document.getElementById("name-input").value.trim();
+  localStorage.setItem("handover-name", yourName);
+  document.getElementById("name-badge").textContent = yourName ? `👤 ${yourName}` : "👤 Naam instellen";
   document.getElementById("name-modal").classList.remove("open");
 }
-document.getElementById("name-modal").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
+document.getElementById("name-modal").addEventListener("click", e => { if(e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
 
-// ── Meta bar ──────────────────────────────────────────────────
+// ── Meta ──────────────────────────────────────────────────────
 function readMeta() {
   return {
     datum:  document.getElementById("meta-datum").value,
@@ -602,23 +501,24 @@ function readMeta() {
     wscc:   document.getElementById("meta-wscc").value,
   };
 }
+let metaTimer;
 function bindMeta() {
-  document.getElementById("meta-datum").value=todayNL();
-  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>{
-    document.getElementById(id).addEventListener("input",()=>{
+  document.getElementById("meta-datum").value = todayNL();
+  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
       clearTimeout(metaTimer);
-      metaTimer=setTimeout(()=>saveMeta(readMeta()),1000);
+      metaTimer = setTimeout(() => saveMetaToDb(readMeta()), 1000);
     });
   });
 }
 
 // ── PDF ───────────────────────────────────────────────────────
 function generatePDF() {
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-  const W=doc.internal.pageSize.getWidth();
-  const m=readMeta();
-  const tClr={bijzonderheden:[79,142,247],speciaal:[245,166,35],invoeren:[155,109,255],levertijden:[45,212,191],ophalen:[244,114,182],geannuleerd:[239,83,83],onder150:[52,211,153],na0000:[107,114,153],onboarding:[79,142,247]};
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W = doc.internal.pageSize.getWidth();
+  const m = readMeta();
+  const tClr = {bijzonderheden:[79,142,247],speciaal:[245,166,35],invoeren:[155,109,255],levertijden:[45,212,191],ophalen:[244,114,182],geannuleerd:[239,83,83],onder150:[52,211,153],na0000:[107,114,153],onboarding:[79,142,247]};
 
   doc.setFillColor(13,15,24); doc.rect(0,0,W,44,"F");
   doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont("helvetica","bold");
@@ -628,39 +528,39 @@ function generatePDF() {
   doc.setFontSize(10); doc.setTextColor(180,190,230);
   doc.text(`Webshop TR: ${m.wstr||"–"}     Webshop ophalen: ${m.wsoph||"–"}     Webshop CC: ${m.wscc||"–"}`,14,36);
 
-  let y=50;
-  TABLES.forEach(t=>{
+  let y = 50;
+  TABLES.forEach(t => {
     if (t.simple) {
-      const val=(data[t.id]||[""])[0].trim();
+      const val = (simples[t.id]||"").trim();
       if (!val) return;
       if (y>260){doc.addPage();y=16;}
-      const [r,g,b]=tClr[t.id]||[120,120,200];
+      const [r,g,b] = tClr[t.id]||[120,120,200];
       doc.setFillColor(r,g,b); doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
       doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
       doc.text(t.label,18,y+5); y+=9;
       doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(50,55,80);
-      const lines=doc.splitTextToSize(val,W-28);
+      const lines = doc.splitTextToSize(val,W-28);
       doc.text(lines,14,y+4); y+=lines.length*5+8;
       return;
     }
-    const rows=(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim()));
-    if (!rows.length) return;
+    const rowList = [...(rows[t.id]||new Map()).values()].filter(r=>rowHasData(t.id,r));
+    if (!rowList.length) return;
     if (y>255){doc.addPage();y=16;}
-    const [r,g,b]=tClr[t.id]||[120,120,200];
+    const [r,g,b] = tClr[t.id]||[120,120,200];
     doc.setFillColor(r,g,b); doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
     doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
     doc.text(t.label,18,y+5); y+=9;
     doc.autoTable({
       startY:y,
       head:[t.cols.map(c=>c.label)],
-      body:rows.map(row=>t.cols.map(c=>row[c.key]||"")),
+      body:rowList.map(row=>t.cols.map(c=>row[c.key]||"")),
       theme:"grid",
       headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:8,fontStyle:"bold"},
       bodyStyles:{textColor:[40,45,70],fontSize:8.5,lineColor:[220,222,230]},
       alternateRowStyles:{fillColor:[248,249,252]},
       margin:{left:14,right:14},
     });
-    y=doc.lastAutoTable.finalY+7;
+    y = doc.lastAutoTable.finalY+7;
   });
   doc.setFontSize(7.5); doc.setTextColor(160,165,200);
   doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`,14,doc.internal.pageSize.getHeight()-7);
@@ -681,47 +581,47 @@ async function handleSend() {
     const pdfB64=doc.output("datauristring").split(",")[1];
     const summary={};
     TABLES.forEach(t=>{
-      if(t.simple){summary[t.label]=(data[t.id]||[""])[0];return;}
-      summary[t.label]=(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).map(r=>{const o={};t.cols.forEach(c=>o[c.label]=r[c.key]||"");return o;});
+      if(t.simple){summary[t.label]=simples[t.id]||"";return;}
+      summary[t.label]=[...(rows[t.id]||new Map()).values()].filter(r=>rowHasData(t.id,r)).map(r=>{const o={};t.cols.forEach(c=>o[c.label]=r[c.key]||"");return o;});
     });
     const res=await fetch(PA_TRIGGER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({datum:today,filename:fname,pdfBase64:pdfB64,meta:m,summary})});
     if (!res.ok) throw new Error("PA "+res.status);
     lbl.textContent="✓ Verstuurd!"; btn.style.background="linear-gradient(135deg,#34D399,#059669)";
-    showToast("✅ Dagrapport verstuurd! PDF is als bijlage meegestuurd.","success");
+    showToast("✅ Dagrapport verstuurd!","success");
     doc.save(fname);
-    // Reset after send
+    // Reset
     if (sb) try { await sb.from("handover_entries").delete().eq("handover_date",todayStr()); } catch(e) {}
-    data=freshData();
+    initState();
     ["meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>document.getElementById(id).value="");
     renderAll();
     setTimeout(()=>{ lbl.textContent="📩 Dagrapport versturen"; btn.style.background=""; btn.disabled=false; },6000);
   } catch(e) {
     console.error(e); lbl.textContent="📩 Dagrapport versturen"; btn.disabled=false;
-    showToast("❌ Versturen mislukt. Controleer de Power Automate URL.","error");
+    showToast("❌ Versturen mislukt.","error");
   }
 }
 
 // ── Utilities ─────────────────────────────────────────────────
-function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 let toastTimer;
-function showToast(msg,type) {
-  const t=document.getElementById("toast"); t.textContent=msg; t.className="show "+(type||"");
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className="",6000);
+function showToast(msg,type){
+  const t=document.getElementById("toast");t.textContent=msg;t.className="show "+(type||"");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className="",6000);
 }
 
 // ── Init ──────────────────────────────────────────────────────
-if (yourName) document.getElementById("name-badge").textContent=`👤 ${yourName}`;
-data=freshData();
+if (yourName) document.getElementById("name-badge").textContent = `👤 ${yourName}`;
+initState();
 bindMeta();
 renderAll();
 
 if (configOk) {
   bgSync();
-  setInterval(bgSync, 6000);
+  setInterval(bgSync, 7000);
+  setSyncStatus("ok");
 } else {
   setSyncStatus("error");
 }
-
 </script>
 </body>
 </html>
