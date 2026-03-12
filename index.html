@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Orderinvoer Dagrapport</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #0D0F18;
+    --surface: #13151F;
+    --surface2:#1A1D2E;
+    --border:  #1E2235;
+    --muted:   #3A3F5C;
+    --text:    #DDE1F0;
+    --sub:     #6B7299;
+    --blue:    #4F8EF7;
+    --red:     #EF5353;
+    --amber:   #F5A623;
+    --purple:  #9B6DFF;
+    --green:   #34D399;
+    --teal:    #2DD4BF;
+    --pink:    #F472B6;
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  button { font-family: inherit; cursor: pointer; }
+  input, textarea, select { font-family: inherit; }
+
+  /* ── Header ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,15,24,0.96); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(135deg,#4F8EF7,#9B6DFF); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+  .brand-name { font-weight: 700; font-size: 14px; letter-spacing: -0.02em; }
+  .brand-sub  { font-size: 11px; color: var(--sub); display:flex; align-items:center; gap:5px; margin-top:2px; }
+  .sync-dot   { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; animation: blink 2.5s infinite; }
+  .sync-dot.red   { background:var(--red); animation:none; }
+  .sync-dot.amber { background:var(--amber); animation:none; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .header-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .btn { border:none; border-radius:8px; padding:7px 14px; font-size:12.5px; font-weight:500; transition:all .2s; display:inline-flex; align-items:center; gap:5px; }
+  .btn-ghost  { background:var(--surface); border:1px solid var(--border); color:var(--sub); }
+  .btn-ghost:hover { color:var(--text); border-color:var(--muted); }
+  .btn-danger { background:rgba(239,83,83,.1); border:1px solid rgba(239,83,83,.25); color:var(--red); }
+  .btn-danger:hover { background:rgba(239,83,83,.2); }
+  .btn-primary { background:linear-gradient(135deg,#4F8EF7,#6366F1); color:#fff; box-shadow:0 3px 12px rgba(79,142,247,.25); }
+  .btn-primary:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 5px 18px rgba(79,142,247,.4); }
+  .btn-primary:disabled { opacity:.45; cursor:default; transform:none; }
+
+  /* ── Meta info bar ── */
+  .meta-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .meta-field { display:flex; align-items:center; gap:8px; font-size:12.5px; }
+  .meta-label { color:var(--sub); white-space:nowrap; }
+  .meta-input { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:4px 10px; font-size:12.5px; color:var(--text); outline:none; transition:border-color .2s; min-width:80px; }
+  .meta-input:focus { border-color:var(--blue); }
+
+  /* ── Tabs ── */
+  .tabs { display:flex; gap:6px; padding:18px 24px 0; flex-wrap:wrap; overflow-x:auto; }
+  .tab { border:none; border-radius:10px; padding:9px 16px; font-size:13px; font-weight:500; background:var(--surface); border:1px solid var(--border); color:var(--sub); cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:7px; white-space:nowrap; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--tab-color); background:color-mix(in srgb,var(--tab-color) 12%,transparent); border-color:color-mix(in srgb,var(--tab-color) 35%,transparent); }
+  .tab-badge { font-size:10.5px; font-weight:700; border-radius:5px; padding:1px 6px; background:color-mix(in srgb,var(--tab-color) 20%,transparent); color:var(--tab-color); }
+
+  /* ── Table area ── */
+  .table-wrap { padding:16px 24px 28px; }
+  .table-card { background:var(--surface); border-radius:14px; overflow:hidden; border:1px solid var(--border); }
+  .table-card-header { padding:12px 18px; display:flex; align-items:center; gap:9px; border-bottom:1px solid var(--border); }
+  .table-card-title { font-weight:600; font-size:14.5px; }
+  .table-card-desc  { font-size:11.5px; color:var(--sub); margin-left:auto; }
+
+  /* Special tables (no columns, just text) */
+  .simple-section { padding:14px 18px; }
+  .simple-section textarea { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:9px; color:var(--text); font-size:13.5px; padding:10px 13px; outline:none; resize:vertical; min-height:80px; transition:border-color .2s; }
+  .simple-section textarea:focus { border-color:var(--blue); }
+  .simple-section textarea::placeholder { color:var(--muted); }
+
+  table { width:100%; border-collapse:collapse; }
+  thead th { padding:8px 12px; font-size:10.5px; font-weight:600; color:var(--sub); text-transform:uppercase; letter-spacing:.07em; background:rgba(255,255,255,.02); border-bottom:1px solid var(--border); text-align:left; }
+  tbody tr { border-bottom:1px solid rgba(30,34,53,.7); transition:background .12s; }
+  tbody tr:last-child { border-bottom:none; }
+  tbody tr:hover:not(.locked-row) { background:rgba(255,255,255,.02); }
+  tbody tr:hover:not(.locked-row) .del-btn { opacity:1; }
+  td { padding:2px 2px; vertical-align:middle; }
+  td input { width:100%; background:transparent; border:none; outline:none; color:var(--text); font-size:13px; padding:7px 10px; border-radius:6px; transition:background .12s; }
+  td input:focus { background:rgba(79,142,247,.07); }
+  td input::placeholder { color:var(--muted); }
+  td input:disabled { color:var(--sub); cursor:not-allowed; }
+  .del-btn { opacity:0; background:none; border:none; color:var(--red); font-size:15px; padding:3px 9px; border-radius:5px; cursor:pointer; transition:opacity .12s,background .12s; }
+  .del-btn:hover { background:rgba(239,83,83,.12); }
+
+  .add-row-btn { width:100%; background:none; border:none; padding:10px 18px; text-align:left; color:var(--muted); font-size:12.5px; cursor:pointer; transition:all .18s; display:flex; align-items:center; gap:6px; border-top:1px solid var(--border); }
+  .add-row-btn:hover { background:rgba(255,255,255,.03); color:var(--text); }
+
+  /* ── Row lock indicator ── */
+  .locked-row { background:rgba(245,166,35,.04) !important; }
+  .lock-badge { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:var(--amber); background:rgba(245,166,35,.12); border-radius:5px; padding:2px 7px; white-space:nowrap; }
+
+  /* ── Conflict dialog ── */
+  .conflict-banner { background:rgba(239,83,83,.1); border:1px solid rgba(239,83,83,.3); border-radius:10px; margin:10px 24px 0; padding:11px 16px; font-size:12.5px; color:var(--red); display:none; }
+  .conflict-banner button { background:rgba(239,83,83,.2); border:1px solid rgba(239,83,83,.4); border-radius:6px; color:var(--red); font-size:12px; padding:3px 10px; margin-left:8px; cursor:pointer; }
+  .conflict-banner button.keep { background:rgba(52,211,153,.15); border-color:rgba(52,211,153,.4); color:var(--green); }
+
+  /* ── Config warning ── */
+  #config-warn { background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.25); border-radius:10px; margin:12px 24px 0; padding:11px 16px; font-size:12.5px; color:var(--amber); display:none; }
+
+  /* ── Footer ── */
+  .footer-hint { text-align:center; font-size:11.5px; color:var(--muted); padding:8px 24px 24px; }
+
+  /* ── Modal ── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:26px; width:340px; transform:translateY(8px); transition:transform .2s; }
+  .modal-overlay.open .modal { transform:translateY(0); }
+  .modal h3 { font-size:16px; font-weight:700; margin-bottom:5px; }
+  .modal p  { font-size:12.5px; color:var(--sub); margin-bottom:16px; line-height:1.5; }
+  .modal input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 13px; font-size:13.5px; color:var(--text); margin-bottom:12px; outline:none; transition:border-color .2s; }
+  .modal input:focus { border-color:var(--blue); }
+  .modal-save { width:100%; background:var(--blue); color:#fff; border:none; border-radius:8px; padding:9px; font-size:13.5px; font-weight:600; cursor:pointer; }
+  .modal-save:hover { opacity:.88; }
+
+  /* ── Toast ── */
+  #toast { position:fixed; bottom:24px; right:24px; background:var(--surface2); border:1px solid var(--border); border-radius:11px; padding:12px 18px; font-size:12.5px; color:var(--text); box-shadow:0 8px 28px rgba(0,0,0,.4); transform:translateY(10px); opacity:0; transition:all .28s; pointer-events:none; z-index:300; max-width:320px; line-height:1.5; }
+  #toast.show { transform:translateY(0); opacity:1; }
+  #toast.success { border-color:rgba(52,211,153,.4); }
+  #toast.error   { border-color:rgba(239,83,83,.4); }
+  #toast.warn    { border-color:rgba(245,166,35,.4); }
+
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  #name-badge { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:12.5px; color:var(--sub); cursor:pointer; transition:all .2s; }
+  #name-badge:hover { color:var(--text); border-color:var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+  🔧 CONFIGURATION — fill in before uploading to SharePoint
+══════════════════════════════════════════════════════════════ -->
+<script>
+// ── A: SharePoint ────────────────────────────────────────────────
+const SP_SITE = "https://kpn1237466.sharepoint.com/sites/TheHub";
+const SP_LIST = "HandoverEntries";
+
+// ── B: Power Automate HTTP trigger URL ──────────────────────────
+const PA_TRIGGER_URL = "https://default057b68203f6c4bfbbed4178db3a988.03.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8ec8f884c5744deba85fbf6a32048718/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Dize9v1xATQzqUooWtEGsiM_xGZqYsaCgA5WbMzsVcE";
+
+// ── C: Tables — label, icon, colour, columns ────────────────────
+// lastCol: optional different label for the last column
+const TABLES = [
+  {
+    id: "bijzonderheden",
+    label: "Bijzonderheden",
+    icon: "📋",
+    color: "#4F8EF7",
+    cols: [
+      { key: "klantnaam",      label: "Klantnaam",      w: 160 },
+      { key: "bijzonderheden", label: "Bijzonderheden",  w: null },
+      { key: "wie",            label: "Wie",             w: 60  },
+      { key: "afgewerkt",      label: "Afgewerkt",       w: 90  },
+    ]
+  },
+  {
+    id: "speciaal",
+    label: "Speciaal verzoek",
+    icon: "⭐",
+    color: "#F5A623",
+    cols: [
+      { key: "klantnaam",  label: "Klantnaam",          w: 160 },
+      { key: "verzoek",    label: "Speciaal verzoek",   w: null },
+      { key: "wie",        label: "Wie",                w: 60  },
+      { key: "afgewerkt",  label: "Afgewerkt",          w: 90  },
+    ]
+  },
+  {
+    id: "invoeren",
+    label: "Nog in te voeren",
+    icon: "✏️",
+    color: "#9B6DFF",
+    cols: [
+      { key: "naam",        label: "Naam + Deb.nr.",                         w: 160 },
+      { key: "artikel",     label: "Artikelomschrijving + art.nr. + aantal + reden", w: null },
+      { key: "wie",         label: "Wie",                                    w: 60  },
+      { key: "afgewerkt",   label: "Afgewerkt",                              w: 90  },
+    ]
+  },
+  {
+    id: "levertijden",
+    label: "Levertijden",
+    icon: "🕐",
+    color: "#2DD4BF",
+    cols: [
+      { key: "klantnaam",  label: "Klantnaam",    w: 160 },
+      { key: "levertijd",  label: "Levertijden",  w: null },
+      { key: "wie",        label: "Wie",          w: 60  },
+      { key: "afgewerkt",  label: "Afgewerkt",    w: 90  },
+    ]
+  },
+  {
+    id: "ophalen",
+    label: "Op laten halen",
+    icon: "🚚",
+    color: "#F472B6",
+    cols: [
+      { key: "klantnaam",  label: "Klantnaam",                          w: 160 },
+      { key: "actie",      label: "Op laten halen / weg laten brengen", w: null },
+      { key: "wie",        label: "Wie",                                w: 60  },
+      { key: "afgewerkt",  label: "Afgewerkt",                          w: 90  },
+    ]
+  },
+  {
+    id: "geannuleerd",
+    label: "Geannuleerde bestellingen",
+    icon: "❌",
+    color: "#EF5353",
+    cols: [
+      { key: "klantnaam",  label: "Klantnaam",              w: 160 },
+      { key: "bestelling", label: "Geannuleerde bestelling", w: null },
+      { key: "wie",        label: "Wie",                    w: 60  },
+      { key: "datum",      label: "Datum",                  w: 90  },
+    ]
+  },
+  // Simple text-only sections
+  { id: "onder150",    label: "Onder €150",      icon: "💶", color: "#34D399", simple: true },
+  { id: "na0000",      label: "Na 00:00 besteld", icon: "🌙", color: "#6B7299", simple: true },
+  { id: "onboarding",  label: "Onboarding",       icon: "🆕", color: "#4F8EF7", simple: true },
+];
+</script>
+
+<!-- Config warning -->
+<div id="config-warn">⚠️ <strong>Setup vereist:</strong> open dit bestand in Kladblok en vul jouw SharePoint URL en Power Automate URL in vóór je het uploadt.</div>
+<!-- Conflict banner -->
+<div class="conflict-banner" id="conflict-banner"></div>
+
+<!-- ── Header ── -->
+<header>
+  <div class="brand">
+    <div class="brand-icon">📨</div>
+    <div>
+      <div class="brand-name">Orderinvoer Dagrapport</div>
+      <div class="brand-sub">
+        <span class="sync-dot amber" id="sync-dot"></span>
+        <span id="sync-label">Verbinden met SharePoint…</span>
+      </div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="entry-count" style="font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;">0 items</span>
+    <button id="name-badge" onclick="openNameModal()">👤 Naam instellen</button>
+    <button class="btn btn-danger" onclick="clearAll()">🗑 Alles wissen</button>
+    <button class="btn btn-primary" id="send-btn" onclick="handleSend()" disabled>
+      <span id="send-label">📩 Dagrapport versturen</span>
+    </button>
+  </div>
+</header>
+
+<!-- ── Meta info (header info from original doc) ── -->
+<div class="meta-bar">
+  <div class="meta-field"><span class="meta-label">Datum:</span><input class="meta-input" id="meta-datum" placeholder="dd-mm-jjjj" style="width:110px"/></div>
+  <div class="meta-field"><span class="meta-label">Orderinvoer avond (naam):</span><input class="meta-input" id="meta-naam" placeholder="Naam" style="width:120px"/></div>
+  <div class="meta-field"><span class="meta-label">Aanvangstijd:</span><input class="meta-input" id="meta-tijd" placeholder="00:00" style="width:70px"/></div>
+  <div class="meta-field"><span class="meta-label">E-mails/InOne:</span><input class="meta-input" id="meta-emails" placeholder="0" style="width:60px"/></div>
+  <div class="meta-field"><span class="meta-label">Webshop TR:</span><input class="meta-input" id="meta-wstr" placeholder="0" style="width:60px"/></div>
+  <div class="meta-field"><span class="meta-label">Webshop ophalen:</span><input class="meta-input" id="meta-wsoph" placeholder="0" style="width:60px"/></div>
+  <div class="meta-field"><span class="meta-label">Webshop CC:</span><input class="meta-input" id="meta-wscc" placeholder="0" style="width:60px"/></div>
+</div>
+
+<div class="tabs" id="tab-bar"></div>
+<div class="table-wrap" id="table-area"></div>
+<div class="footer-hint">Live synchronisatie met SharePoint · vernieuwd elke 5 seconden · Data reset automatisch elke dag</div>
+
+<!-- Name modal -->
+<div class="modal-overlay" id="name-modal">
+  <div class="modal">
+    <h3>Jouw naam</h3>
+    <p>Dit vult automatisch de kolom "Wie" in, zodat collega's weten wie welke invoer heeft gedaan.</p>
+    <input type="text" id="name-input" placeholder="bijv. KH" onkeydown="if(event.key==='Enter') saveName()"/>
+    <button class="modal-save" onclick="saveName()">Opslaan</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+// ── State ────────────────────────────────────────────────────────
+let data       = {};        // { tableId: [rows] }
+let meta       = {};        // header fields
+let locks      = {};        // { tableId_rowLocalId: { name, ts } }
+let activeTab  = TABLES[0].id;
+let yourName   = localStorage.getItem("handover-name") || "";
+let remoteSnap = {};        // last known remote state for conflict detection
+let pollTimer  = null;
+let metaSaveTimer = null;
+
+function emptyRow(tableId) {
+  const t = TABLES.find(x => x.id === tableId);
+  const row = { localId: crypto.randomUUID(), spId: null, _editing: false };
+  if (t && !t.simple) t.cols.forEach(c => row[c.key] = "");
+  return row;
+}
+function emptyTable(tableId) { return [emptyRow(tableId), emptyRow(tableId), emptyRow(tableId)]; }
+function freshData() { return Object.fromEntries(TABLES.map(t => [t.id, t.simple ? [""] : emptyTable(t.id)])); }
+function todayStr()  { return new Date().toISOString().slice(0,10); }
+function todayNL()   { return new Date().toLocaleDateString("nl-NL", { day:"2-digit", month:"2-digit", year:"numeric" }); }
+
+const configOk = SP_SITE !== "https://yourcompany.sharepoint.com/sites/YourSiteName" && PA_TRIGGER_URL !== "PASTE_YOUR_POWER_AUTOMATE_URL_HERE";
+if (!configOk) document.getElementById("config-warn").style.display = "block";
+
+// ── SharePoint API ───────────────────────────────────────────────
+const SP_API   = SP_SITE + "/_api/web/lists/getbytitle('" + SP_LIST + "')/items";
+const SP_META  = SP_SITE + "/_api/web/lists/getbytitle('HandoverMeta')/items";
+const SP_LOCKS = SP_SITE + "/_api/web/lists/getbytitle('HandoverLocks')/items";
+
+async function spDigest() {
+  const r = await fetch(SP_SITE + "/_api/contextinfo", { method:"POST", credentials:"include", headers:{ "Accept":"application/json;odata=nometadata" } });
+  const j = await r.json(); return j.FormDigestValue;
+}
+async function spGet(url) {
+  const r = await fetch(url, { credentials:"include", headers:{ "Accept":"application/json;odata=nometadata" } });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+async function spPost(url, body, digest, method) {
+  const h = { "Accept":"application/json;odata=nometadata", "Content-Type":"application/json;odata=nometadata", "X-RequestDigest": digest || await spDigest() };
+  if (method === "PATCH") { h["IF-MATCH"]="*"; h["X-HTTP-Method"]="MERGE"; }
+  if (method === "DELETE") { h["IF-MATCH"]="*"; h["X-HTTP-Method"]="DELETE"; }
+  const r = await fetch(url, { method: (method==="PATCH"||method==="DELETE") ? "POST" : (method||"POST"), credentials:"include", headers:h, body: JSON.stringify(body) });
+  if (!r.ok) { const t = await r.text(); throw new Error(r.status + ": " + t); }
+  return r;
+}
+
+// ── Load from SP ─────────────────────────────────────────────────
+async function loadFromSP() {
+  try {
+    const today   = todayStr();
+    const filter  = encodeURIComponent(`HandoverDate eq '${today}'`);
+    const res     = await spGet(`${SP_API}?$filter=${filter}&$select=Id,TableId,RowData,LocalId&$top=500`);
+    const fresh   = freshData();
+
+    (res.value || []).forEach(item => {
+      const tid = item.TableId;
+      const t   = TABLES.find(x => x.id === tid);
+      if (!t) return;
+      if (t.simple) {
+        fresh[tid] = [item.RowData || ""];
+      } else {
+        // Remove placeholder rows first, then add real ones
+        if (fresh[tid].every(r => !r.spId)) fresh[tid] = [];
+        try {
+          const rowData = JSON.parse(item.RowData || "{}");
+          rowData.spId    = item.Id;
+          rowData.localId = item.LocalId || String(item.Id);
+          fresh[tid].push(rowData);
+        } catch(e) {}
+      }
+    });
+
+    // Ensure min 3 blank rows for table types
+    TABLES.forEach(t => {
+      if (!t.simple) {
+        while (fresh[t.id].length < 3) fresh[t.id].push(emptyRow(t.id));
+      }
+    });
+
+    // Conflict detection: compare with what we last sent
+    detectConflicts(fresh);
+
+    data       = fresh;
+    remoteSnap = JSON.parse(JSON.stringify(fresh));
+    renderAll();
+    setSyncStatus("ok");
+
+    // Also load locks
+    loadLocks();
+  } catch(e) {
+    console.warn("SP load error:", e);
+    setSyncStatus("error");
+    if (!Object.keys(data).length) { data = freshData(); renderAll(); }
+  }
+}
+
+async function loadLocks() {
+  try {
+    const cutoff = new Date(Date.now() - 30000).toISOString(); // 30s ago
+    const filter = encodeURIComponent(`LockTime ge '${cutoff}'`);
+    const res    = await spGet(`${SP_LOCKS}?$filter=${filter}&$select=RowKey,LockedBy,LockTime&$top=200`);
+    locks = {};
+    (res.value||[]).forEach(l => { locks[l.RowKey] = { name: l.LockedBy, ts: l.LockTime }; });
+    renderTable(); // re-render to show/hide lock badges
+  } catch(e) { /* locks list may not exist yet */ }
+}
+
+async function writeLock(tableId, localId) {
+  if (!yourName || !configOk) return;
+  const key = tableId + "_" + localId;
+  try {
+    const digest = await spDigest();
+    // Check if lock exists
+    const existing = await spGet(`${SP_LOCKS}?$filter=RowKey eq '${key}'&$select=Id&$top=1`);
+    const payload  = { RowKey: key, LockedBy: yourName, LockTime: new Date().toISOString() };
+    if (existing.value && existing.value.length) {
+      await spPost(`${SP_LOCKS}(${existing.value[0].Id})`, payload, digest, "PATCH");
+    } else {
+      await spPost(SP_LOCKS, payload, digest);
+    }
+  } catch(e) { /* non-critical */ }
+}
+
+async function releaseLock(tableId, localId) {
+  if (!configOk) return;
+  const key = tableId + "_" + localId;
+  try {
+    const existing = await spGet(`${SP_LOCKS}?$filter=RowKey eq '${key}'&$select=Id,LockedBy&$top=1`);
+    if (existing.value && existing.value.length && existing.value[0].LockedBy === yourName) {
+      const digest = await spDigest();
+      await spPost(`${SP_LOCKS}(${existing.value[0].Id})`, {}, digest, "DELETE");
+    }
+  } catch(e) { /* non-critical */ }
+}
+
+function detectConflicts(incoming) {
+  const conflicts = [];
+  TABLES.forEach(t => {
+    if (t.simple) return;
+    (incoming[t.id]||[]).forEach(remoteRow => {
+      const localRow = (data[t.id]||[]).find(r => r.localId === remoteRow.localId);
+      if (!localRow || !localRow._editing) return;
+      // Compare key fields
+      const changed = t.cols.some(c => localRow[c.key] !== remoteRow[c.key] && remoteRow[c.key]);
+      if (changed) conflicts.push({ tableId: t.id, localId: remoteRow.localId, who: remoteRow.wie || "collega" });
+    });
+  });
+  if (conflicts.length) showConflictBanner(conflicts);
+}
+
+function showConflictBanner(conflicts) {
+  const banner = document.getElementById("conflict-banner");
+  const names  = [...new Set(conflicts.map(c => c.who))].join(", ");
+  banner.style.display = "block";
+  banner.innerHTML = `⚠️ <strong>${names}</strong> heeft ${conflicts.length === 1 ? "een rij" : conflicts.length + " rijen"} aangepast terwijl jij aan het typen was.
+    <button class="keep" onclick="keepMine()">Mijn versie bewaren</button>
+    <button onclick="reloadTheirs()">Hun versie laden</button>`;
+}
+
+function keepMine() {
+  document.getElementById("conflict-banner").style.display = "none";
+  // Re-save all currently editing rows
+  TABLES.forEach(t => {
+    if (t.simple) return;
+    (data[t.id]||[]).forEach(row => { if (row._editing) saveRow(t.id, row); });
+  });
+}
+function reloadTheirs() {
+  document.getElementById("conflict-banner").style.display = "none";
+  loadFromSP();
+}
+
+// ── Save row ─────────────────────────────────────────────────────
+async function saveRow(tableId, row) {
+  const t = TABLES.find(x => x.id === tableId);
+  if (!t || t.simple) return;
+  // Skip completely empty rows
+  if (t.cols.every(c => !row[c.key]?.trim())) return;
+  const rowData = {};
+  t.cols.forEach(c => rowData[c.key] = row[c.key] || "");
+  const payload = { TableId: tableId, RowData: JSON.stringify(rowData), HandoverDate: todayStr(), LocalId: row.localId };
+  try {
+    if (row.spId) {
+      await spPost(`${SP_API}(${row.spId})`, payload, null, "PATCH");
+    } else {
+      const r    = await spPost(SP_API, payload);
+      const json = await r.json();
+      row.spId   = json.Id;
+    }
+    setSyncStatus("ok");
+  } catch(e) {
+    console.warn("Save error:", e);
+    setSyncStatus("error");
+    showToast("⚠️ Opslaan mislukt. Controleer je verbinding.", "warn");
+  }
+}
+
+async function saveSimple(tableId, value) {
+  if (!configOk) return;
+  try {
+    const today   = todayStr();
+    const filter  = encodeURIComponent(`HandoverDate eq '${today}' and TableId eq '${tableId}'`);
+    const existing = await spGet(`${SP_API}?$filter=${filter}&$select=Id&$top=1`);
+    const payload  = { TableId: tableId, RowData: value, HandoverDate: today, LocalId: tableId };
+    if (existing.value && existing.value.length) {
+      await spPost(`${SP_API}(${existing.value[0].Id})`, payload, null, "PATCH");
+    } else {
+      await spPost(SP_API, payload);
+    }
+  } catch(e) { console.warn("Simple save error:", e); }
+}
+
+async function deleteRowSP(row) {
+  if (!row.spId || !configOk) return;
+  try { await spPost(`${SP_API}(${row.spId})`, {}, null, "DELETE"); } catch(e) {}
+}
+
+// ── Meta save ────────────────────────────────────────────────────
+function readMeta() {
+  return {
+    datum:  document.getElementById("meta-datum").value,
+    naam:   document.getElementById("meta-naam").value,
+    tijd:   document.getElementById("meta-tijd").value,
+    emails: document.getElementById("meta-emails").value,
+    wstr:   document.getElementById("meta-wstr").value,
+    wsoph:  document.getElementById("meta-wsoph").value,
+    wscc:   document.getElementById("meta-wscc").value,
+  };
+}
+function bindMetaInputs() {
+  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      clearTimeout(metaSaveTimer);
+      metaSaveTimer = setTimeout(() => saveSimple("_meta", JSON.stringify(readMeta())), 1000);
+    });
+  });
+  // Pre-fill today's date
+  document.getElementById("meta-datum").value = todayNL();
+}
+
+// ── Sync status ──────────────────────────────────────────────────
+function setSyncStatus(state) {
+  const dot = document.getElementById("sync-dot");
+  const lbl = document.getElementById("sync-label");
+  const map = {
+    ok:      ["sync-dot",       "Live gesynchroniseerd"],
+    error:   ["sync-dot red",   "Synchronisatiefout"],
+    loading: ["sync-dot amber", "Synchroniseren…"],
+  };
+  const [cls,txt] = map[state]||map.ok;
+  dot.className = cls; lbl.textContent = txt;
+}
+
+// ── Render ───────────────────────────────────────────────────────
+function renderAll() { renderTabs(); renderTable(); updateEntryCount(); }
+
+function renderTabs() {
+  document.getElementById("tab-bar").innerHTML = TABLES.map(t => {
+    const count = t.simple
+      ? (data[t.id]?.[0]?.trim() ? 1 : 0)
+      : (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim())).length;
+    const active = t.id === activeTab ? "active" : "";
+    return `<button class="tab ${active}" style="--tab-color:${t.color}" onclick="switchTab('${t.id}')">
+      <span>${t.icon}</span><span>${t.label}</span>
+      ${count ? `<span class="tab-badge">${count}</span>` : ""}
+    </button>`;
+  }).join("");
+}
+
+function renderTable() {
+  const t = TABLES.find(x => x.id === activeTab);
+  if (!t) return;
+
+  if (t.simple) {
+    document.getElementById("table-area").innerHTML = `
+      <div class="table-card">
+        <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
+          <span style="font-size:19px">${t.icon}</span>
+          <span class="table-card-title" style="color:${t.color}">${t.label}</span>
+        </div>
+        <div class="simple-section">
+          <textarea id="simple-ta" placeholder="Voer hier klanten in…" oninput="updateSimple('${t.id}',this.value)">${esc((data[t.id]||[""])[0])}</textarea>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const rows  = data[t.id] || [];
+  const thCells = t.cols.map(c => `<th style="${c.w ? `width:${c.w}px` : ''}">${c.label}</th>`).join("") + `<th style="width:36px"></th>`;
+
+  const tbRows = rows.map(row => {
+    const lockKey  = t.id + "_" + row.localId;
+    const lock     = locks[lockKey];
+    const isLocked = lock && lock.name !== yourName;
+    const lockedCls = isLocked ? "locked-row" : "";
+
+    const tds = t.cols.map((c, ci) => {
+      if (isLocked) {
+        return ci === 0
+          ? `<td><div style="padding:7px 10px;font-size:13px;display:flex;align-items:center;gap:8px;"><span>${esc(row[c.key]||"")}</span><span class="lock-badge">🔒 ${esc(lock.name)}</span></div></td>`
+          : `<td><input type="text" value="${esc(row[c.key]||"")}" disabled/></td>`;
+      }
+      const ph = c.key === "wie" && yourName ? yourName : c.label + "…";
+      return `<td><input type="text" value="${esc(row[c.key]||"")}" placeholder="${ph}"
+        onchange="updateCell('${t.id}','${row.localId}','${c.key}',this.value)"
+        onfocus="onCellFocus('${t.id}','${row.localId}','${c.key}',this)"
+        onblur="onCellBlur('${t.id}','${row.localId}')"
+      /></td>`;
+    }).join("");
+
+    return `<tr class="${lockedCls}">${tds}<td style="text-align:center">
+      ${isLocked ? "" : `<button class="del-btn" onclick="deleteRow('${t.id}','${row.localId}')" title="Verwijder rij">×</button>`}
+    </td></tr>`;
+  }).join("");
+
+  document.getElementById("table-area").innerHTML = `
+    <div class="table-card">
+      <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
+        <span style="font-size:19px">${t.icon}</span>
+        <span class="table-card-title" style="color:${t.color}">${t.label}</span>
+      </div>
+      <table><thead><tr>${thCells}</tr></thead><tbody>${tbRows}</tbody></table>
+      <button class="add-row-btn" onclick="addRow('${t.id}')">＋ Rij toevoegen</button>
+    </div>`;
+}
+
+function updateEntryCount() {
+  const total = TABLES.reduce((sum, t) => {
+    if (t.simple) return sum + ((data[t.id]||[""])[0].trim() ? 1 : 0);
+    return sum + (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim())).length;
+  }, 0);
+  document.getElementById("entry-count").textContent = `${total} items`;
+  document.getElementById("send-btn").disabled = total === 0 || !configOk;
+}
+
+// ── Interactions ─────────────────────────────────────────────────
+function switchTab(id) { activeTab = id; renderAll(); }
+
+function onCellFocus(tableId, localId, colKey, input) {
+  const row = (data[tableId]||[]).find(r => r.localId === localId);
+  if (!row) return;
+  row._editing = true;
+  // Auto-fill "wie"
+  if (colKey === "wie" && !input.value && yourName) {
+    input.value = yourName;
+    updateCell(tableId, localId, colKey, yourName);
+  }
+  writeLock(tableId, localId);
+}
+
+function onCellBlur(tableId, localId) {
+  const row = (data[tableId]||[]).find(r => r.localId === localId);
+  if (row) row._editing = false;
+  releaseLock(tableId, localId);
+}
+
+function updateCell(tableId, localId, colKey, value) {
+  const row = (data[tableId]||[]).find(r => r.localId === localId);
+  if (!row) return;
+  row[colKey] = value;
+  updateEntryCount(); renderTabs();
+  setSyncStatus("loading");
+  clearTimeout(row._saveTimer);
+  row._saveTimer = setTimeout(() => saveRow(tableId, row), 800);
+}
+
+function updateSimple(tableId, value) {
+  if (!data[tableId]) data[tableId] = [""];
+  data[tableId][0] = value;
+  updateEntryCount(); renderTabs();
+  clearTimeout(window._simpleTimer);
+  window._simpleTimer = setTimeout(() => saveSimple(tableId, value), 1000);
+}
+
+function addRow(tableId) {
+  if (!data[tableId]) data[tableId] = [];
+  data[tableId].push(emptyRow(tableId));
+  renderAll();
+}
+
+async function deleteRow(tableId, localId) {
+  const row = (data[tableId]||[]).find(r => r.localId === localId);
+  if (row) { await releaseLock(tableId, localId); await deleteRowSP(row); }
+  data[tableId] = (data[tableId]||[]).filter(r => r.localId !== localId);
+  if (!data[tableId].filter(r => { const t=TABLES.find(x=>x.id===tableId); return t&&!t.simple&&t.cols.some(c=>r[c.key]?.trim()); }).length)
+    data[tableId] = [emptyRow(tableId), emptyRow(tableId), emptyRow(tableId)];
+  renderAll();
+}
+
+async function clearAll() {
+  if (!confirm("Alle invoer van vandaag wissen? Dit geldt voor iedereen.")) return;
+  TABLES.forEach(t => { if (!t.simple) (data[t.id]||[]).forEach(r => deleteRowSP(r)); });
+  data = freshData();
+  renderAll();
+  showToast("Alle invoer gewist.", "");
+}
+
+// ── Name modal ───────────────────────────────────────────────────
+function openNameModal() {
+  document.getElementById("name-input").value = yourName;
+  document.getElementById("name-modal").classList.add("open");
+  setTimeout(() => document.getElementById("name-input").focus(), 100);
+}
+function saveName() {
+  const v = document.getElementById("name-input").value.trim();
+  yourName = v; localStorage.setItem("handover-name", v);
+  document.getElementById("name-badge").textContent = v ? `👤 ${v}` : "👤 Naam instellen";
+  document.getElementById("name-modal").classList.remove("open");
+}
+document.getElementById("name-modal").addEventListener("click", e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
+
+// ── PDF ───────────────────────────────────────────────────────────
+function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc   = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+  const W     = doc.internal.pageSize.getWidth();
+  const m     = readMeta();
+  const tColors = { bijzonderheden:[79,142,247], speciaal:[245,166,35], invoeren:[155,109,255], levertijden:[45,212,191], ophalen:[244,114,182], geannuleerd:[239,83,83], onder150:[52,211,153], na0000:[107,114,153], onboarding:[79,142,247] };
+
+  // Header
+  doc.setFillColor(13,15,24); doc.rect(0,0,W,32,"F");
+  doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont("helvetica","bold");
+  doc.text("Orderinvoer Dagrapport", 14, 13);
+  doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(160,165,200);
+  doc.text(`Datum: ${m.datum || todayNL()}   |   Naam: ${m.naam||"–"}   |   Aanvangstijd: ${m.tijd||"–"}   |   E-mails/InOne: ${m.emails||"–"}   |   Webshop TR: ${m.wstr||"–"}   |   Ophalen: ${m.wsoph||"–"}   |   CC: ${m.wscc||"–"}`, 14, 22);
+
+  let y = 38;
+  TABLES.forEach(t => {
+    if (t.simple) {
+      const val = (data[t.id]||[""])[0].trim();
+      if (!val) return;
+      if (y > 260) { doc.addPage(); y=16; }
+      const [r,g,b] = tColors[t.id]||[120,120,200];
+      doc.setFillColor(r,g,b);
+      doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
+      doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
+      doc.text(`${t.icon}  ${t.label}`, 18, y+5);
+      y += 9;
+      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(50,55,80);
+      const lines = doc.splitTextToSize(val, W-28);
+      doc.text(lines, 14, y+4);
+      y += lines.length * 5 + 8;
+      return;
+    }
+    const rows = (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim()));
+    if (!rows.length) return;
+    if (y > 255) { doc.addPage(); y=16; }
+    const [r,g,b] = tColors[t.id]||[120,120,200];
+    doc.setFillColor(r,g,b);
+    doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
+    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
+    doc.text(`${t.icon}  ${t.label}`, 18, y+5);
+    y += 9;
+    doc.autoTable({
+      startY: y,
+      head: [t.cols.map(c=>c.label)],
+      body: rows.map(row => t.cols.map(c=>row[c.key]||"")),
+      theme: "grid",
+      headStyles: { fillColor:[30,34,53], textColor:[180,185,210], fontSize:8, fontStyle:"bold" },
+      bodyStyles: { textColor:[40,45,70], fontSize:8.5, lineColor:[220,222,230] },
+      alternateRowStyles: { fillColor:[248,249,252] },
+      margin: { left:14, right:14 },
+    });
+    y = doc.lastAutoTable.finalY + 7;
+  });
+
+  doc.setFontSize(7.5); doc.setTextColor(160,165,200);
+  doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`, 14, doc.internal.pageSize.getHeight()-7);
+  return doc;
+}
+
+// ── Send ─────────────────────────────────────────────────────────
+async function handleSend() {
+  if (!configOk) { showToast("⚠️ Vul eerst de configuratie in.", "warn"); return; }
+  const btn = document.getElementById("send-btn");
+  const lbl = document.getElementById("send-label");
+  btn.disabled = true;
+  lbl.innerHTML = '<span class="spin"></span> Versturen…';
+
+  try {
+    const doc   = generatePDF();
+    const m     = readMeta();
+    const fname = `Dagrapport_${(m.datum||todayNL()).replace(/\//g,"-").replace(/\s/g,"_")}.pdf`;
+    const pdfB64 = doc.output("datauristring").split(",")[1];
+
+    const summary = {};
+    TABLES.forEach(t => {
+      if (t.simple) { summary[t.label] = (data[t.id]||[""])[0]; return; }
+      summary[t.label] = (data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).map(r=>{ const o={}; t.cols.forEach(c=>o[c.label]=r[c.key]||""); return o; });
+    });
+
+    const res = await fetch(PA_TRIGGER_URL, {
+      method: "POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({ datum: m.datum||todayNL(), filename: fname, pdfBase64: pdfB64, meta: m, summary })
+    });
+    if (!res.ok) throw new Error("PA status " + res.status);
+
+    lbl.textContent = "✓ Verstuurd!";
+    btn.style.background = "linear-gradient(135deg,#34D399,#059669)";
+    showToast("✅ Dagrapport verstuurd! PDF is automatisch als bijlage meegestuurd.", "success");
+    doc.save(fname); // local backup
+
+    setTimeout(() => { lbl.textContent = "📩 Dagrapport versturen"; btn.style.background=""; btn.disabled=false; }, 6000);
+  } catch(e) {
+    console.error(e);
+    lbl.textContent = "📩 Dagrapport versturen"; btn.disabled = false;
+    showToast("❌ Versturen mislukt. Controleer de Power Automate URL.", "error");
+  }
+}
+
+// ── Utilities ────────────────────────────────────────────────────
+function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+let toastTimer;
+function showToast(msg,type) {
+  const t=document.getElementById("toast"); t.textContent=msg; t.className="show "+(type||"");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className="",6000);
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+if (yourName) document.getElementById("name-badge").textContent = `👤 ${yourName}`;
+data = freshData();
+bindMetaInputs();
+renderAll();
+
+if (configOk) {
+  loadFromSP();
+  pollTimer = setInterval(() => { loadFromSP(); }, 5000);
+} else {
+  setSyncStatus("error");
+}
+</script>
+</body>
+</html>
