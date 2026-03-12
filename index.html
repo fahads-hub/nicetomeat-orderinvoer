@@ -278,417 +278,319 @@ const configOk = SUPABASE_URL !== "PASTE_YOUR_SUPABASE_URL_HERE" && SUPABASE_KEY
 if (!configOk) document.getElementById("config-warn").style.display = "block";
 
 let sb = null;
-if (configOk) {
-  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-}
+if (configOk) sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── State ─────────────────────────────────────────────────────
+// data[tableId] = array of row objects (for table types)
+//               = [string] (for simple types)
 let data      = {};
 let locks     = {};
 let activeTab = TABLES[0].id;
 let yourName  = localStorage.getItem("handover-name") || "";
-let pollTimer = null;
 let metaTimer = null;
 
-function emptyRow(tableId) {
-  const t = TABLES.find(x => x.id === tableId);
-  const row = { localId: crypto.randomUUID(), dbId: null, _editing: false };
-  if (t && !t.simple) t.cols.forEach(c => row[c.key] = "");
-  return row;
+function uuid()      { return crypto.randomUUID(); }
+function todayStr()  { return new Date().toISOString().slice(0,10); }
+function todayNL()   { return new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"}); }
+function emptyRow(tid) {
+  const t = TABLES.find(x=>x.id===tid);
+  const r = { localId: uuid(), dbId: null };
+  if (t && !t.simple) t.cols.forEach(c => r[c.key]="");
+  return r;
 }
-function emptyTable(tid) { return [emptyRow(tid), emptyRow(tid), emptyRow(tid)]; }
-function freshData()     { return Object.fromEntries(TABLES.map(t => [t.id, t.simple ? [""] : emptyTable(t.id)])); }
-function todayStr()      { return new Date().toISOString().slice(0,10); }
-function todayNL()       { return new Date().toLocaleDateString("nl-NL", { day:"2-digit", month:"2-digit", year:"numeric" }); }
+function freshData() { return Object.fromEntries(TABLES.map(t=>[t.id, t.simple?[""]:[ emptyRow(t.id),emptyRow(t.id),emptyRow(t.id) ]])); }
 
 // ── Supabase helpers ──────────────────────────────────────────
-async function sbGet(table, filters = {}) {
+async function sbGet(table, filters={}) {
   let q = sb.from(table).select("*");
-  Object.entries(filters).forEach(([k,v]) => { q = q.eq(k, v); });
-  const { data, error } = await q;
+  Object.entries(filters).forEach(([k,v])=>{ q=q.eq(k,v); });
+  const {data,error} = await q;
   if (error) throw error;
   return data;
 }
 async function sbInsert(table, row) {
-  const { data, error } = await sb.from(table).insert(row).select().single();
+  const {data,error} = await sb.from(table).insert(row).select().single();
   if (error) throw error;
   return data;
 }
 async function sbUpdate(table, id, row) {
-  const { error } = await sb.from(table).update(row).eq("id", id);
+  const {error} = await sb.from(table).update(row).eq("id",id);
   if (error) throw error;
 }
 async function sbUpsert(table, row, conflict) {
-  const { error } = await sb.from(table).upsert(row, { onConflict: conflict });
+  const {error} = await sb.from(table).upsert(row,{onConflict:conflict});
   if (error) throw error;
 }
 async function sbDelete(table, id) {
-  const { error } = await sb.from(table).delete().eq("id", id);
+  const {error} = await sb.from(table).delete().eq("id",id);
   if (error) throw error;
 }
 
-// ── Load data ─────────────────────────────────────────────────
-async function loadData() {
+// ── Load from Supabase (background, never disrupts typing) ────
+async function bgSync() {
   if (!sb) return;
+  // Don't sync if any input is focused
+  if (document.activeElement && document.activeElement.tagName === "INPUT") return;
+  if (document.activeElement && document.activeElement.tagName === "TEXTAREA") return;
   try {
     const rows = await sbGet("handover_entries", { handover_date: todayStr() });
     const fresh = freshData();
-
     rows.forEach(item => {
       const tid = item.table_id;
-      const t   = TABLES.find(x => x.id === tid);
+      if (tid === "_meta") { applyMeta(item.row_data); return; }
+      const t = TABLES.find(x=>x.id===tid);
       if (!t) return;
-      if (t.simple) {
-        fresh[tid] = [item.row_data?.text || ""];
-      } else {
-        if (fresh[tid].every(r => !r.dbId)) fresh[tid] = [];
-        const rowData = { ...item.row_data, dbId: item.id, localId: item.local_id || item.id, _editing: false };
-        fresh[tid].push(rowData);
-      }
+      if (t.simple) { fresh[tid] = [item.row_data?.text||""]; return; }
+      if (fresh[tid].every(r=>!r.dbId)) fresh[tid]=[];
+      fresh[tid].push({...item.row_data, dbId:item.id, localId:item.local_id||item.id});
     });
-
-    // Detect conflicts before overwriting
-    detectConflicts(fresh);
-
-    TABLES.forEach(t => {
-      if (!t.simple) {
-        while (fresh[t.id].length < 3) fresh[t.id].push(emptyRow(t.id));
-      }
-    });
-
+    TABLES.forEach(t=>{ if(!t.simple) while(fresh[t.id].length<3) fresh[t.id].push(emptyRow(t.id)); });
     data = fresh;
-    renderAll();
-    setSyncStatus("ok");
-
     // Load locks
-    loadLocks();
+    const cutoff = new Date(Date.now()-30000).toISOString();
+    const {data:lockRows} = await sb.from("handover_locks").select("*").gte("lock_time",cutoff);
+    locks={};
+    (lockRows||[]).forEach(l=>{ locks[l.row_key]={name:l.locked_by}; });
+    setSyncStatus("ok");
+    renderAll();
   } catch(e) {
-    console.error("Load error:", e);
+    console.error(e);
     setSyncStatus("error");
-    if (!Object.keys(data).length) { data = freshData(); renderAll(); }
   }
 }
 
-async function loadLocks() {
-  if (!sb) return;
-  try {
-    const cutoff = new Date(Date.now() - 30000).toISOString();
-    const { data: lockRows } = await sb.from("handover_locks").select("*").gte("lock_time", cutoff);
-    locks = {};
-    (lockRows||[]).forEach(l => { locks[l.row_key] = { name: l.locked_by, ts: l.lock_time }; });
-    renderTable();
-  } catch(e) {}
+function applyMeta(m) {
+  if (!m) return;
+  const fields = {datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
+  Object.entries(fields).forEach(([k,id])=>{ if(m[k] && document.activeElement?.id!==id) document.getElementById(id).value=m[k]||""; });
 }
 
-// ── Save row ──────────────────────────────────────────────────
+// ── Save helpers ──────────────────────────────────────────────
 async function saveRow(tableId, row) {
   if (!sb) return;
-  const t = TABLES.find(x => x.id === tableId);
-  if (!t || t.simple) return;
-  if (t.cols.every(c => !row[c.key]?.trim())) return;
-  const rowData = {};
-  t.cols.forEach(c => rowData[c.key] = row[c.key] || "");
-  const payload = { table_id: tableId, row_data: rowData, handover_date: todayStr(), local_id: row.localId };
+  const t = TABLES.find(x=>x.id===tableId);
+  if (!t||t.simple) return;
+  if (t.cols.every(c=>!(row[c.key]||"").trim())) return;
+  const rowData={};
+  t.cols.forEach(c=>rowData[c.key]=row[c.key]||"");
+  const payload={table_id:tableId,row_data:rowData,handover_date:todayStr(),local_id:row.localId};
   try {
-    if (row.dbId) {
-      await sbUpdate("handover_entries", row.dbId, payload);
-    } else {
-      const inserted = await sbInsert("handover_entries", payload);
-      row.dbId = inserted.id;
-    }
+    if (row.dbId) { await sbUpdate("handover_entries",row.dbId,payload); }
+    else { const ins=await sbInsert("handover_entries",payload); row.dbId=ins.id; }
     setSyncStatus("ok");
-  } catch(e) {
-    console.error("Save error:", e);
-    setSyncStatus("error");
-    showToast("⚠️ Opslaan mislukt. Controleer je verbinding.", "warn");
-  }
+  } catch(e) { setSyncStatus("error"); }
 }
 
 async function saveSimple(tableId, value) {
   if (!sb) return;
   try {
-    const existing = await sbGet("handover_entries", { handover_date: todayStr(), table_id: tableId });
-    if (existing.length) {
-      await sbUpdate("handover_entries", existing[0].id, { row_data: { text: value } });
-    } else {
-      await sbInsert("handover_entries", { table_id: tableId, row_data: { text: value }, handover_date: todayStr(), local_id: tableId });
-    }
-  } catch(e) { console.warn("Simple save error:", e); }
+    const ex=await sbGet("handover_entries",{handover_date:todayStr(),table_id:tableId});
+    if (ex.length) await sbUpdate("handover_entries",ex[0].id,{row_data:{text:value}});
+    else await sbInsert("handover_entries",{table_id:tableId,row_data:{text:value},handover_date:todayStr(),local_id:tableId});
+  } catch(e) {}
 }
 
-async function saveMeta(meta) {
+async function saveMeta(m) {
   if (!sb) return;
   try {
-    const existing = await sbGet("handover_entries", { handover_date: todayStr(), table_id: "_meta" });
-    if (existing.length) {
-      await sbUpdate("handover_entries", existing[0].id, { row_data: meta });
-    } else {
-      await sbInsert("handover_entries", { table_id: "_meta", row_data: meta, handover_date: todayStr(), local_id: "_meta" });
-    }
+    const ex=await sbGet("handover_entries",{handover_date:todayStr(),table_id:"_meta"});
+    if (ex.length) await sbUpdate("handover_entries",ex[0].id,{row_data:m});
+    else await sbInsert("handover_entries",{table_id:"_meta",row_data:m,handover_date:todayStr(),local_id:"_meta"});
   } catch(e) {}
 }
 
-// ── Row locking ───────────────────────────────────────────────
 async function writeLock(tableId, localId) {
-  if (!sb || !yourName) return;
-  try {
-    await sbUpsert("handover_locks", { row_key: tableId+"_"+localId, locked_by: yourName, lock_time: new Date().toISOString() }, "row_key");
-  } catch(e) {}
+  if (!sb||!yourName) return;
+  try { await sbUpsert("handover_locks",{row_key:tableId+"_"+localId,locked_by:yourName,lock_time:new Date().toISOString()},"row_key"); } catch(e) {}
 }
 async function releaseLock(tableId, localId) {
   if (!sb) return;
-  try {
-    const rows = await sbGet("handover_locks", { row_key: tableId+"_"+localId });
-    if (rows.length && rows[0].locked_by === yourName) await sbDelete("handover_locks", rows[0].id);
-  } catch(e) {}
+  try { const r=await sbGet("handover_locks",{row_key:tableId+"_"+localId}); if(r.length&&r[0].locked_by===yourName) await sbDelete("handover_locks",r[0].id); } catch(e) {}
 }
-
-// ── Conflict detection ────────────────────────────────────────
-function detectConflicts(incoming) {
-  const conflicts = [];
-  TABLES.forEach(t => {
-    if (t.simple) return;
-    (incoming[t.id]||[]).forEach(remoteRow => {
-      const localRow = (data[t.id]||[]).find(r => r.localId === remoteRow.localId);
-      if (!localRow || !localRow._editing) return;
-      const changed = t.cols.some(c => localRow[c.key] !== remoteRow[c.key] && remoteRow[c.key]);
-      if (changed) conflicts.push({ tableId: t.id, localId: remoteRow.localId, who: remoteRow.wie || "collega" });
-    });
-  });
-  if (conflicts.length) {
-    const banner = document.getElementById("conflict-banner");
-    const names  = [...new Set(conflicts.map(c => c.who))].join(", ");
-    banner.style.display = "flex";
-    banner.innerHTML = `⚠️ <strong>${names}</strong> heeft ${conflicts.length === 1 ? "een rij" : conflicts.length + " rijen"} aangepast terwijl jij aan het typen was.
-      <button class="keep" onclick="keepMine()">Mijn versie bewaren</button>
-      <button onclick="reloadTheirs()">Hun versie laden</button>`;
-  }
-}
-function keepMine()    { document.getElementById("conflict-banner").style.display="none"; TABLES.forEach(t => { if (!t.simple) (data[t.id]||[]).forEach(r => { if (r._editing) saveRow(t.id, r); }); }); }
-function reloadTheirs(){ document.getElementById("conflict-banner").style.display="none"; loadData(); }
 
 // ── Sync status ───────────────────────────────────────────────
 function setSyncStatus(state) {
-  const dot = document.getElementById("sync-dot");
-  const lbl = document.getElementById("sync-label");
-  const map = { ok:["sync-dot","Live gesynchroniseerd"], error:["sync-dot red","Synchronisatiefout"], loading:["sync-dot amber","Synchroniseren…"] };
-  const [cls,txt] = map[state]||map.ok;
+  const dot=document.getElementById("sync-dot"), lbl=document.getElementById("sync-label");
+  const map={ok:["sync-dot","Live gesynchroniseerd"],error:["sync-dot red","Synchronisatiefout"],loading:["sync-dot amber","Synchroniseren…"]};
+  const [cls,txt]=map[state]||map.ok;
   dot.className=cls; lbl.textContent=txt;
 }
 
-// ── Editing guard — pause re-render while typing ──────────────
-let activelyEditing = false;
-let editingPauseTimer = null;
-
-function markEditing() {
-  activelyEditing = true;
-  clearTimeout(editingPauseTimer);
-  // Resume sync 3 seconds after last keystroke
-  editingPauseTimer = setTimeout(() => { activelyEditing = false; }, 3000);
+// ── Render — ONLY called when not typing ──────────────────────
+function renderAll() {
+  if (document.activeElement && (document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA")) return;
+  renderTabs(); renderTable(); updateEntryCount();
 }
 
-// ── Render ────────────────────────────────────────────────────
-function renderAll() { renderTabs(); renderTable(); updateEntryCount(); }
-
 function renderTabs() {
-  document.getElementById("tab-bar").innerHTML = TABLES.map(t => {
-    const count = t.simple
-      ? ((data[t.id]||[""])[0].trim() ? 1 : 0)
-      : (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim())).length;
-    const active = t.id === activeTab ? "active" : "";
+  document.getElementById("tab-bar").innerHTML = TABLES.map(t=>{
+    const count = t.simple ? ((data[t.id]||[""])[0].trim()?1:0)
+                           : (data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length;
+    const active = t.id===activeTab?"active":"";
     return `<button class="tab ${active}" style="--tab-color:${t.color}" onclick="switchTab('${t.id}')">
       <span>${t.icon}</span><span>${t.label}</span>
-      ${count ? `<span class="tab-badge">${count}</span>` : ""}
+      ${count?`<span class="tab-badge">${count}</span>`:""}
     </button>`;
   }).join("");
 }
 
 function renderTable() {
-  // Never re-render the table while someone is actively typing
-  if (activelyEditing) return;
-
-  const t = TABLES.find(x => x.id === activeTab);
+  const t = TABLES.find(x=>x.id===activeTab);
   if (!t) return;
   if (t.simple) {
-    // For simple textarea — only re-render if not focused
-    const existing = document.getElementById("simple-ta");
-    if (existing && document.activeElement === existing) return;
-    document.getElementById("table-area").innerHTML = `
+    document.getElementById("table-area").innerHTML=`
       <div class="table-card">
         <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
           <span style="font-size:19px">${t.icon}</span>
           <span class="table-card-title" style="color:${t.color}">${t.label}</span>
         </div>
         <div class="simple-section">
-          <textarea id="simple-ta" placeholder="Voer hier klanten in…" oninput="updateSimple('${t.id}',this.value)">${esc((data[t.id]||[""])[0])}</textarea>
+          <textarea id="simple-ta" placeholder="Voer hier klanten in…" oninput="onSimpleInput('${t.id}',this.value)">${esc((data[t.id]||[""])[0])}</textarea>
         </div>
       </div>`;
     return;
   }
-
-  const rows    = data[t.id] || [];
-  const thCells = t.cols.map(c => `<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("") + `<th style="width:36px"></th>`;
-
-  // Check if we can do a smart update (update values only without destroying DOM)
-  const tbody = document.querySelector("#table-area tbody");
-  const existingRows = tbody ? tbody.querySelectorAll("tr") : [];
-  const canSmartUpdate = tbody && existingRows.length === rows.length;
-
-  if (canSmartUpdate) {
-    // Smart update: only update input values that changed, don't touch focused inputs
-    rows.forEach((row, ri) => {
-      const tr = existingRows[ri];
-      if (!tr) return;
-      const inputs = tr.querySelectorAll("input");
-      t.cols.forEach((c, ci) => {
-        const input = inputs[ci];
-        if (!input || document.activeElement === input) return; // skip focused
-        const newVal = row[c.key] || "";
-        if (input.value !== newVal) input.value = newVal;
-      });
-    });
-    return;
-  }
-
-  // Full re-render (only when structure changes e.g. rows added/removed)
-  const tbRows  = rows.map(row => {
-    const lockKey  = t.id+"_"+row.localId;
-    const lock     = locks[lockKey];
-    const isLocked = lock && lock.name !== yourName;
-    const tds = t.cols.map((c,ci) => {
+  const rows=data[t.id]||[];
+  const thCells=t.cols.map(c=>`<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("")+`<th style="width:36px"></th>`;
+  const tbRows=rows.map((row,ri)=>{
+    const lockKey=t.id+"_"+row.localId;
+    const lock=locks[lockKey];
+    const isLocked=lock&&lock.name!==yourName;
+    const tds=t.cols.map((c,ci)=>{
       if (isLocked) return ci===0
-        ? `<td><div style="padding:7px 10px;font-size:13px;display:flex;align-items:center;gap:8px;"><span>${esc(row[c.key]||"")}</span><span class="lock-badge">🔒 ${esc(lock.name)}</span></div></td>`
-        : `<td><input type="text" value="${esc(row[c.key]||"")}" disabled/></td>`;
-      const ph = c.key==="wie" && yourName ? yourName : c.label+"…";
-      return `<td><input type="text" value="${esc(row[c.key]||"")}" placeholder="${ph}"
-        oninput="markEditing()"
-        onchange="updateCell('${t.id}','${row.localId}','${c.key}',this.value)"
-        onfocus="onFocus('${t.id}','${row.localId}','${c.key}',this)"
-        onblur="onBlur('${t.id}','${row.localId}')"
+        ? `<td><div style="padding:7px 10px;font-size:13px;display:flex;align-items:center;gap:8px;">${esc(row[c.key]||"")}<span class="lock-badge">🔒 ${esc(lock.name)}</span></div></td>`
+        : `<td><input value="${esc(row[c.key]||"")}" disabled/></td>`;
+      const ph=c.key==="wie"&&yourName?yourName:c.label+"…";
+      return `<td><input
+        data-tid="${t.id}" data-lid="${row.localId}" data-col="${c.key}"
+        value="${esc(row[c.key]||"")}" placeholder="${ph}"
       /></td>`;
     }).join("");
-    return `<tr class="${isLocked?"locked-row":""}">${tds}<td style="text-align:center">
+    return `<tr class="${isLocked?"locked-row":""}" data-lid="${row.localId}">${tds}<td style="text-align:center">
       ${isLocked?"":` <button class="del-btn" onclick="deleteRow('${t.id}','${row.localId}')" title="Verwijder">×</button>`}
     </td></tr>`;
   }).join("");
 
-  document.getElementById("table-area").innerHTML = `
+  document.getElementById("table-area").innerHTML=`
     <div class="table-card">
       <div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
         <span style="font-size:19px">${t.icon}</span>
         <span class="table-card-title" style="color:${t.color}">${t.label}</span>
       </div>
-      <table><thead><tr>${thCells}</tr></thead><tbody>${tbRows}</tbody></table>
+      <table><thead><tr>${thCells}</tr></thead><tbody id="active-tbody">${tbRows}</tbody></table>
       <button class="add-row-btn" onclick="addRow('${t.id}')">＋ Rij toevoegen</button>
     </div>`;
-}
 
-function updateEntryCount() {
-  const total = TABLES.reduce((sum,t) => {
-    if (t.simple) return sum + ((data[t.id]||[""])[0].trim() ? 1 : 0);
-    return sum + (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim())).length;
-  }, 0);
-  document.getElementById("entry-count").textContent = `${total} items`;
-  document.getElementById("send-btn").disabled = total === 0 || !configOk;
-}
-
-// ── Interactions ──────────────────────────────────────────────
-function switchTab(id) { flushInputsToDom(activeTab); activelyEditing = false; activeTab=id; renderAll(); }
-
-function onFocus(tableId, localId, colKey, input) {
-  const row = (data[tableId]||[]).find(r => r.localId===localId);
-  if (!row) return;
-  row._editing = true;
-  markEditing();
-  if (colKey==="wie" && !input.value && yourName) { input.value=yourName; updateCell(tableId,localId,colKey,yourName); }
-  writeLock(tableId, localId);
-}
-function onBlur(tableId, localId) {
-  const row = (data[tableId]||[]).find(r => r.localId===localId);
-  if (row) row._editing = false;
-  releaseLock(tableId, localId);
-  // Allow sync to resume after a short delay
-  clearTimeout(editingPauseTimer);
-  editingPauseTimer = setTimeout(() => { activelyEditing = false; }, 1500);
-}
-
-function updateCell(tableId, localId, colKey, value) {
-  const row = (data[tableId]||[]).find(r => r.localId===localId);
-  if (!row) return;
-  row[colKey] = value;
-  updateEntryCount(); renderTabs();
-  setSyncStatus("loading");
-  clearTimeout(row._saveTimer);
-  row._saveTimer = setTimeout(() => saveRow(tableId, row), 800);
-}
-
-function updateSimple(tableId, value) {
-  if (!data[tableId]) data[tableId]=[""];
-  data[tableId][0] = value;
-  updateEntryCount(); renderTabs();
-  clearTimeout(window._simpleTimer);
-  window._simpleTimer = setTimeout(() => saveSimple(tableId, value), 1000);
-}
-
-// Flush current DOM input values into data state before re-rendering
-function flushInputsToDom(tableId) {
-  const t = TABLES.find(x => x.id === tableId);
-  if (!t || t.simple) return;
-  const rows = data[tableId] || [];
-  const trs  = document.querySelectorAll("#table-area tbody tr");
-  trs.forEach((tr, ri) => {
-    const row = rows[ri];
-    if (!row) return;
-    const inputs = tr.querySelectorAll("input:not([disabled])");
-    t.cols.forEach((c, ci) => {
-      if (inputs[ci]) row[c.key] = inputs[ci].value;
-    });
+  // Attach events via JS (not inline) so they are stable
+  document.querySelectorAll("#active-tbody input").forEach(input=>{
+    input.addEventListener("focus", onInputFocus);
+    input.addEventListener("blur",  onInputBlur);
+    input.addEventListener("input", onInputChange);
   });
 }
 
-function addRow(tableId) {
-  // Save any unsaved input values from the DOM before re-rendering
-  flushInputsToDom(tableId);
-  if (!data[tableId]) data[tableId]=[];
-  data[tableId].push(emptyRow(tableId));
-  activelyEditing = false;
-  renderAll();
+function updateEntryCount() {
+  const total=TABLES.reduce((sum,t)=>{
+    if (t.simple) return sum+((data[t.id]||[""])[0].trim()?1:0);
+    return sum+(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length;
+  },0);
+  document.getElementById("entry-count").textContent=`${total} items`;
+  document.getElementById("send-btn").disabled=total===0||!configOk;
 }
 
-async function deleteRow(tableId, localId) {
-  const row = (data[tableId]||[]).find(r => r.localId===localId);
-  if (row) { await releaseLock(tableId,localId); if (row.dbId && sb) await sbDelete("handover_entries", row.dbId); }
-  data[tableId] = (data[tableId]||[]).filter(r => r.localId!==localId);
-  if (!(data[tableId]||[]).filter(r => { const t=TABLES.find(x=>x.id===tableId); return t&&!t.simple&&t.cols.some(c=>r[c.key]?.trim()); }).length)
-    data[tableId] = [emptyRow(tableId),emptyRow(tableId),emptyRow(tableId)];
-  renderAll();
+// ── Input event handlers (attached via JS, not inline HTML) ──
+function onInputFocus(e) {
+  const {tid,lid,col} = e.target.dataset;
+  if (!tid) return;
+  const row=(data[tid]||[]).find(r=>r.localId===lid);
+  if (!row) return;
+  // Auto-fill Wie
+  if (col==="wie" && !e.target.value && yourName) {
+    e.target.value=yourName;
+    row[col]=yourName;
+    scheduleSave(tid, row);
+  }
+  writeLock(tid, lid);
+}
+
+function onInputBlur(e) {
+  const {tid,lid,col} = e.target.dataset;
+  if (!tid) return;
+  const row=(data[tid]||[]).find(r=>r.localId===lid);
+  if (row) row[col]=e.target.value;
+  releaseLock(tid, lid);
+  updateEntryCount();
+}
+
+function onInputChange(e) {
+  const {tid,lid,col} = e.target.dataset;
+  if (!tid) return;
+  const row=(data[tid]||[]).find(r=>r.localId===lid);
+  if (!row) return;
+  row[col]=e.target.value;  // update state immediately
+  scheduleSave(tid, row);
+}
+
+const saveTimers={};
+function scheduleSave(tid, row) {
+  setSyncStatus("loading");
+  clearTimeout(saveTimers[row.localId]);
+  saveTimers[row.localId]=setTimeout(()=>saveRow(tid,row), 1000);
+}
+
+function onSimpleInput(tid, value) {
+  if (!data[tid]) data[tid]=[""];
+  data[tid][0]=value;
+  updateEntryCount();
+  clearTimeout(window._simpleTimer);
+  window._simpleTimer=setTimeout(()=>saveSimple(tid,value),1000);
+}
+
+// ── Tab switching ─────────────────────────────────────────────
+function switchTab(id) {
+  activeTab=id;
+  renderTabs(); renderTable(); updateEntryCount();
+}
+
+// ── Add / delete row ──────────────────────────────────────────
+function addRow(tid) {
+  if (!data[tid]) data[tid]=[];
+  data[tid].push(emptyRow(tid));
+  renderTabs(); renderTable(); updateEntryCount();
+}
+
+async function deleteRow(tid, lid) {
+  const row=(data[tid]||[]).find(r=>r.localId===lid);
+  if (row) { await releaseLock(tid,lid); if(row.dbId&&sb) await sbDelete("handover_entries",row.dbId); }
+  data[tid]=(data[tid]||[]).filter(r=>r.localId!==lid);
+  const t=TABLES.find(x=>x.id===tid);
+  if (t&&!t.simple&&!(data[tid]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).length)
+    data[tid]=[emptyRow(tid),emptyRow(tid),emptyRow(tid)];
+  renderTabs(); renderTable(); updateEntryCount();
 }
 
 async function clearAll() {
   if (!confirm("Alle invoer van vandaag wissen? Dit geldt voor iedereen.")) return;
-  if (sb) {
-    try { await sb.from("handover_entries").delete().eq("handover_date", todayStr()); } catch(e) {}
-  }
-  data = freshData();
-  renderAll();
-  showToast("Alle invoer gewist.", "");
+  if (sb) try { await sb.from("handover_entries").delete().eq("handover_date",todayStr()); } catch(e) {}
+  data=freshData(); renderAll();
+  showToast("Alle invoer gewist.","");
 }
 
 // ── Name modal ────────────────────────────────────────────────
 function openNameModal() {
-  document.getElementById("name-input").value = yourName;
+  document.getElementById("name-input").value=yourName;
   document.getElementById("name-modal").classList.add("open");
-  setTimeout(() => document.getElementById("name-input").focus(), 100);
+  setTimeout(()=>document.getElementById("name-input").focus(),100);
 }
 function saveName() {
-  const v = document.getElementById("name-input").value.trim();
+  const v=document.getElementById("name-input").value.trim();
   yourName=v; localStorage.setItem("handover-name",v);
-  document.getElementById("name-badge").textContent = v ? `👤 ${v}` : "👤 Naam instellen";
+  document.getElementById("name-badge").textContent=v?`👤 ${v}`:"👤 Naam instellen";
   document.getElementById("name-modal").classList.remove("open");
 }
-document.getElementById("name-modal").addEventListener("click", e => { if (e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
+document.getElementById("name-modal").addEventListener("click",e=>{ if(e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
 
-// ── Meta ──────────────────────────────────────────────────────
+// ── Meta bar ──────────────────────────────────────────────────
 function readMeta() {
   return {
     datum:  document.getElementById("meta-datum").value,
@@ -701,106 +603,101 @@ function readMeta() {
   };
 }
 function bindMeta() {
-  document.getElementById("meta-datum").value = todayNL();
-  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id => {
-    document.getElementById(id).addEventListener("input", () => {
+  document.getElementById("meta-datum").value=todayNL();
+  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>{
+    document.getElementById(id).addEventListener("input",()=>{
       clearTimeout(metaTimer);
-      metaTimer = setTimeout(() => saveMeta(readMeta()), 1000);
+      metaTimer=setTimeout(()=>saveMeta(readMeta()),1000);
     });
   });
 }
 
 // ── PDF ───────────────────────────────────────────────────────
 function generatePDF() {
-  const { jsPDF } = window.jspdf;
-  const doc  = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-  const W    = doc.internal.pageSize.getWidth();
-  const m    = readMeta();
-  const tClr = { bijzonderheden:[79,142,247], speciaal:[245,166,35], invoeren:[155,109,255], levertijden:[45,212,191], ophalen:[244,114,182], geannuleerd:[239,83,83], onder150:[52,211,153], na0000:[107,114,153], onboarding:[79,142,247] };
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=doc.internal.pageSize.getWidth();
+  const m=readMeta();
+  const tClr={bijzonderheden:[79,142,247],speciaal:[245,166,35],invoeren:[155,109,255],levertijden:[45,212,191],ophalen:[244,114,182],geannuleerd:[239,83,83],onder150:[52,211,153],na0000:[107,114,153],onboarding:[79,142,247]};
 
-  doc.setFillColor(13,15,24); doc.rect(0,0,W,42,"F");
+  doc.setFillColor(13,15,24); doc.rect(0,0,W,44,"F");
   doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont("helvetica","bold");
-  doc.text("Orderinvoer Dagrapport", 14, 13);
+  doc.text("Orderinvoer Dagrapport",14,13);
   doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(220,225,245);
-  doc.text(`Datum: ${m.datum||todayNL()}     Naam: ${m.naam||"–"}     Aanvangstijd: ${m.tijd||"–"}     E-mails/InOne: ${m.emails||"–"}`, 14, 25);
+  doc.text(`Datum: ${m.datum||todayNL()}     Naam: ${m.naam||"–"}     Aanvangstijd: ${m.tijd||"–"}     E-mails/InOne: ${m.emails||"–"}`,14,25);
   doc.setFontSize(10); doc.setTextColor(180,190,230);
-  doc.text(`Webshop TR: ${m.wstr||"–"}     Webshop ophalen: ${m.wsoph||"–"}     Webshop CC: ${m.wscc||"–"}`, 14, 36);
+  doc.text(`Webshop TR: ${m.wstr||"–"}     Webshop ophalen: ${m.wsoph||"–"}     Webshop CC: ${m.wscc||"–"}`,14,36);
 
-  let y = 50;
-  TABLES.forEach(t => {
+  let y=50;
+  TABLES.forEach(t=>{
     if (t.simple) {
-      const val = (data[t.id]||[""])[0].trim();
+      const val=(data[t.id]||[""])[0].trim();
       if (!val) return;
-      if (y>260) { doc.addPage(); y=16; }
-      const [r,g,b] = tClr[t.id]||[120,120,200];
+      if (y>260){doc.addPage();y=16;}
+      const [r,g,b]=tClr[t.id]||[120,120,200];
       doc.setFillColor(r,g,b); doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
       doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
-      doc.text(t.label, 18, y+5); y+=9;
+      doc.text(t.label,18,y+5); y+=9;
       doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(50,55,80);
-      const lines = doc.splitTextToSize(val, W-28);
-      doc.text(lines, 14, y+4); y += lines.length*5+8;
+      const lines=doc.splitTextToSize(val,W-28);
+      doc.text(lines,14,y+4); y+=lines.length*5+8;
       return;
     }
-    const rows = (data[t.id]||[]).filter(r => t.cols.some(c => r[c.key]?.trim()));
+    const rows=(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim()));
     if (!rows.length) return;
-    if (y>255) { doc.addPage(); y=16; }
-    const [r,g,b] = tClr[t.id]||[120,120,200];
+    if (y>255){doc.addPage();y=16;}
+    const [r,g,b]=tClr[t.id]||[120,120,200];
     doc.setFillColor(r,g,b); doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
     doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
-    doc.text(t.label, 18, y+5); y+=9;
+    doc.text(t.label,18,y+5); y+=9;
     doc.autoTable({
-      startY: y,
-      head: [t.cols.map(c=>c.label)],
-      body: rows.map(row => t.cols.map(c=>row[c.key]||"")),
-      theme: "grid",
-      headStyles: { fillColor:[30,34,53], textColor:[180,185,210], fontSize:8, fontStyle:"bold" },
-      bodyStyles: { textColor:[40,45,70], fontSize:8.5, lineColor:[220,222,230] },
-      alternateRowStyles: { fillColor:[248,249,252] },
-      margin: { left:14, right:14 },
+      startY:y,
+      head:[t.cols.map(c=>c.label)],
+      body:rows.map(row=>t.cols.map(c=>row[c.key]||"")),
+      theme:"grid",
+      headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:8,fontStyle:"bold"},
+      bodyStyles:{textColor:[40,45,70],fontSize:8.5,lineColor:[220,222,230]},
+      alternateRowStyles:{fillColor:[248,249,252]},
+      margin:{left:14,right:14},
     });
-    y = doc.lastAutoTable.finalY+7;
+    y=doc.lastAutoTable.finalY+7;
   });
   doc.setFontSize(7.5); doc.setTextColor(160,165,200);
-  doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`, 14, doc.internal.pageSize.getHeight()-7);
+  doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`,14,doc.internal.pageSize.getHeight()-7);
   return doc;
 }
 
 // ── Send ──────────────────────────────────────────────────────
 async function handleSend() {
-  if (!configOk) { showToast("⚠️ Vul eerst de configuratie in.", "warn"); return; }
-  if (PA_TRIGGER_URL === "PASTE_YOUR_POWER_AUTOMATE_URL_HERE") { showToast("⚠️ Vul de Power Automate URL in.", "warn"); return; }
-  const btn=document.getElementById("send-btn"), lbl=document.getElementById("send-label");
+  if (!configOk){showToast("⚠️ Vul eerst de configuratie in.","warn");return;}
+  if (PA_TRIGGER_URL==="PASTE_YOUR_POWER_AUTOMATE_URL_HERE"){showToast("⚠️ Vul de Power Automate URL in.","warn");return;}
+  const btn=document.getElementById("send-btn"),lbl=document.getElementById("send-label");
   btn.disabled=true; lbl.innerHTML='<span class="spin"></span> Versturen…';
   try {
-    const doc    = generatePDF();
-    const m      = readMeta();
-    const today  = m.datum || todayNL();
-    const fname  = `Dagrapport_${today.replace(/\//g,"-")}.pdf`;
-    const pdfB64 = doc.output("datauristring").split(",")[1];
-    const summary = {};
-    TABLES.forEach(t => {
-      if (t.simple) { summary[t.label]=(data[t.id]||[""])[0]; return; }
-      summary[t.label]=(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).map(r=>{ const o={}; t.cols.forEach(c=>o[c.label]=r[c.key]||""); return o; });
+    const doc=generatePDF();
+    const m=readMeta();
+    const today=m.datum||todayNL();
+    const fname=`Dagrapport_${today.replace(/\//g,"-")}.pdf`;
+    const pdfB64=doc.output("datauristring").split(",")[1];
+    const summary={};
+    TABLES.forEach(t=>{
+      if(t.simple){summary[t.label]=(data[t.id]||[""])[0];return;}
+      summary[t.label]=(data[t.id]||[]).filter(r=>t.cols.some(c=>r[c.key]?.trim())).map(r=>{const o={};t.cols.forEach(c=>o[c.label]=r[c.key]||"");return o;});
     });
-    const res = await fetch(PA_TRIGGER_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ datum:today, filename:fname, pdfBase64:pdfB64, meta:m, summary }) });
+    const res=await fetch(PA_TRIGGER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({datum:today,filename:fname,pdfBase64:pdfB64,meta:m,summary})});
     if (!res.ok) throw new Error("PA "+res.status);
     lbl.textContent="✓ Verstuurd!"; btn.style.background="linear-gradient(135deg,#34D399,#059669)";
-    showToast("✅ Dagrapport verstuurd! PDF is als bijlage meegestuurd.", "success");
+    showToast("✅ Dagrapport verstuurd! PDF is als bijlage meegestuurd.","success");
     doc.save(fname);
-    // Reset all data after successful send
-    if (sb) { try { await sb.from("handover_entries").delete().eq("handover_date", todayStr()); } catch(e) {} }
-    data = freshData();
-    document.getElementById("meta-naam").value = "";
-    document.getElementById("meta-tijd").value = "";
-    document.getElementById("meta-emails").value = "";
-    document.getElementById("meta-wstr").value = "";
-    document.getElementById("meta-wsoph").value = "";
-    document.getElementById("meta-wscc").value = "";
+    // Reset after send
+    if (sb) try { await sb.from("handover_entries").delete().eq("handover_date",todayStr()); } catch(e) {}
+    data=freshData();
+    ["meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>document.getElementById(id).value="");
     renderAll();
-    setTimeout(() => { lbl.textContent="📩 Dagrapport versturen"; btn.style.background=""; btn.disabled=false; }, 6000);
+    setTimeout(()=>{ lbl.textContent="📩 Dagrapport versturen"; btn.style.background=""; btn.disabled=false; },6000);
   } catch(e) {
     console.error(e); lbl.textContent="📩 Dagrapport versturen"; btn.disabled=false;
-    showToast("❌ Versturen mislukt. Controleer de Power Automate URL.", "error");
+    showToast("❌ Versturen mislukt. Controleer de Power Automate URL.","error");
   }
 }
 
@@ -813,17 +710,18 @@ function showToast(msg,type) {
 }
 
 // ── Init ──────────────────────────────────────────────────────
-if (yourName) document.getElementById("name-badge").textContent = `👤 ${yourName}`;
-data = freshData();
+if (yourName) document.getElementById("name-badge").textContent=`👤 ${yourName}`;
+data=freshData();
 bindMeta();
 renderAll();
 
 if (configOk) {
-  loadData();
-  pollTimer = setInterval(loadData, 5000);
+  bgSync();
+  setInterval(bgSync, 6000);
 } else {
   setSyncStatus("error");
 }
+
 </script>
 </body>
 </html>
