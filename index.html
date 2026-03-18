@@ -250,9 +250,16 @@ async function bgSync() {
     let changed = false;
     dbRows.forEach(item => {
       const tid = item.table_id;
-      if (tid === "_meta") return; // skip meta for now
-      const t = getTableDef(tid);
-      if (!t) return;
+      if (tid === "_meta") {
+      const m = item.row_data;
+      if (!m) return;
+      const fields = {datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
+      Object.entries(fields).forEach(([k,id]) => {
+        const el = document.getElementById(id);
+        if (el && document.activeElement !== el) el.value = m[k] || "";
+      });
+      return;
+      }
 
       if (t.simple) {
         // Only update simple if textarea not focused
