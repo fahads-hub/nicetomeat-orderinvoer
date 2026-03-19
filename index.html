@@ -237,6 +237,13 @@ async function bgSync() {
     dbRows.forEach(item => {
       const tid = item.table_id;
 
+      if (tid === "_clear") {
+        initState();
+        renderAll();
+        showToast("Invoer gewist door een collega.", "warn");
+        return;
+      }
+
       if (tid === "_meta") {
         const m = item.row_data;
         if (!m) return;
@@ -456,6 +463,8 @@ async function deleteRow(tid, lid) {
 async function clearAll() {
   if (!confirm("Alle invoer van vandaag wissen? Dit geldt voor iedereen.")) return;
   if (sb) try { await sb.from("handover_entries").delete().eq("handover_date", todayStr()); } catch(e) {}
+  // Insert a special "clear" signal so other users pick it up via bgSync
+  if (sb) try { await sb.from("handover_entries").insert({table_id:"_clear", row_data:{cleared:true}, handover_date:todayStr(), local_id:"_clear"}); } catch(e) {}
   initState();
   renderAll();
   showToast("Alle invoer gewist.", "");
