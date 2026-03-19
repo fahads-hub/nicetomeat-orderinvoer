@@ -240,10 +240,10 @@ async function bgSync() {
       if (tid === "_clear") {
         if (!window._clearedAlready) {
           window._clearedAlready = true;
+          if (sb) sb.from("handover_entries").delete().eq("table_id", "_clear").eq("handover_date", todayStr()).then(() => {});
           initState();
           renderAll();
           showToast("Invoer gewist door een collega.", "warn");
-          setTimeout(() => { window._clearedAlready = false; }, 10000);
         }
         return;
       }
