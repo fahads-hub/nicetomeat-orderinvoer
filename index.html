@@ -111,7 +111,7 @@ const TABLES = [
   <div class="brand">
     <div class="brand-icon">📨</div>
     <div>
-      <div class="brand-name">Orderinvoer Dagrapport</div>
+      <div class="brand-name" style="color: #FAF9F6;">Orderinvoer Dagrapport</div>
       <div class="brand-sub"><span class="sync-dot amber" id="sync-dot"></span><span id="sync-label">Verbinden…</span></div>
     </div>
   </div>
@@ -154,36 +154,26 @@ const TABLES = [
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-// ── Setup ─────────────────────────────────────────────────────
 const configOk = SUPABASE_URL !== "PASTE_YOUR_SUPABASE_URL_HERE" && SUPABASE_KEY !== "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
 if (!configOk) document.getElementById("config-warn").style.display = "block";
 let sb = configOk ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-// ── Core state — this is the single source of truth ───────────
-// Never overwrite this from Supabase if a row exists locally
-let rows = {};   // rows[tableId] = Map(localId -> rowObj)
-let simples = {}; // simples[tableId] = string
+let rows = {};
+let simples = {};
 let activeTab = TABLES[0].id;
 let yourName = localStorage.getItem("handover-name") || "";
 
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function todayNL()  { return new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function uid()      { return crypto.randomUUID(); }
-
 function getTableDef(id) { return TABLES.find(t=>t.id===id); }
 
-// Init state
 function initState() {
   TABLES.forEach(t => {
-    if (t.simple) {
-      simples[t.id] = "";
-    } else {
+    if (t.simple) { simples[t.id] = ""; }
+    else {
       rows[t.id] = new Map();
-      // Add 3 empty rows
-      for (let i=0; i<3; i++) {
-        const id = uid();
-        rows[t.id].set(id, makeRow(t.id, id));
-      }
+      for (let i=0; i<3; i++) { const id=uid(); rows[t.id].set(id, makeRow(t.id, id)); }
     }
   });
 }
@@ -200,7 +190,6 @@ function rowHasData(tid, row) {
   return t && t.cols.some(c => (row[c.key]||"").trim());
 }
 
-// ── Supabase ──────────────────────────────────────────────────
 async function saveRowToDb(tid, row) {
   if (!sb || !rowHasData(tid, row)) return;
   const t = getTableDef(tid);
@@ -223,11 +212,8 @@ async function saveSimpleToDb(tid, value) {
   if (!sb) return;
   try {
     const {data: ex} = await sb.from("handover_entries").select("id").eq("handover_date", todayStr()).eq("table_id", tid);
-    if (ex && ex.length) {
-      await sb.from("handover_entries").update({row_data:{text:value}}).eq("id", ex[0].id);
-    } else {
-      await sb.from("handover_entries").insert({table_id:tid, row_data:{text:value}, handover_date:todayStr(), local_id:tid});
-    }
+    if (ex && ex.length) await sb.from("handover_entries").update({row_data:{text:value}}).eq("id", ex[0].id);
+    else await sb.from("handover_entries").insert({table_id:tid, row_data:{text:value}, handover_date:todayStr(), local_id:tid});
   } catch(e) {}
 }
 
@@ -240,7 +226,7 @@ async function saveMetaToDb(m) {
   } catch(e) {}
 }
 
-// Background sync — ONLY adds rows from other users, never overwrites local data
+let firstSync = true;
 async function bgSync() {
   if (!sb) return;
   try {
@@ -250,19 +236,22 @@ async function bgSync() {
     let changed = false;
     dbRows.forEach(item => {
       const tid = item.table_id;
+
       if (tid === "_meta") {
-      const m = item.row_data;
-      if (!m) return;
-      const fields = {datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
-      Object.entries(fields).forEach(([k,id]) => {
-        const el = document.getElementById(id);
-        if (el && document.activeElement !== el) el.value = m[k] || "";
-      });
-      return;
+        const m = item.row_data;
+        if (!m) return;
+        const fields = {datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
+        Object.entries(fields).forEach(([k,id]) => {
+          const el = document.getElementById(id);
+          if (el && document.activeElement !== el) el.value = m[k] || "";
+        });
+        return;
       }
 
+      const t = getTableDef(tid);
+      if (!t) return;
+
       if (t.simple) {
-        // Only update simple if textarea not focused
         const ta = document.getElementById("simple-ta-"+tid);
         if (!ta || document.activeElement !== ta) {
           const newVal = item.row_data?.text || "";
@@ -271,21 +260,30 @@ async function bgSync() {
         return;
       }
 
-      // For table rows: only add rows we don't have locally
+      if (firstSync && rows[tid]) rows[tid] = new Map();
+
       const localId = item.local_id || item.id;
       if (!rows[tid]) rows[tid] = new Map();
       if (!rows[tid].has(localId)) {
-        // New row from another user — add it
         const rowData = { localId, dbId: item.id, dirty: false };
         t.cols.forEach(c => rowData[c.key] = item.row_data?.[c.key] || "");
         rows[tid].set(localId, rowData);
         changed = true;
       } else {
-        // Row exists locally — update dbId if missing, but don't overwrite values
         const localRow = rows[tid].get(localId);
         if (!localRow.dbId) { localRow.dbId = item.id; }
       }
     });
+
+    if (firstSync) {
+      TABLES.forEach(t => {
+        if (t.simple) return;
+        if (!rows[t.id]) rows[t.id] = new Map();
+        while (rows[t.id].size < 3) { const id=uid(); rows[t.id].set(id, makeRow(t.id, id)); }
+      });
+      firstSync = false;
+      changed = true;
+    }
 
     if (changed) renderAll();
     setSyncStatus("ok");
@@ -295,7 +293,6 @@ async function bgSync() {
   }
 }
 
-// ── Save timers per row ───────────────────────────────────────
 const saveTimers = {};
 function scheduleSave(tid, row) {
   setSyncStatus("loading");
@@ -303,13 +300,12 @@ function scheduleSave(tid, row) {
   saveTimers[row.localId] = setTimeout(() => saveRowToDb(tid, row), 900);
 }
 
-// ── Render ────────────────────────────────────────────────────
 function setSyncStatus(s) {
   const dot = document.getElementById("sync-dot");
   const lbl = document.getElementById("sync-label");
-  if (s==="ok")      { dot.className="sync-dot"; lbl.textContent="Live gesynchroniseerd"; }
+  if (s==="ok")         { dot.className="sync-dot"; lbl.textContent="Live gesynchroniseerd"; }
   else if (s==="error") { dot.className="sync-dot red"; lbl.textContent="Synchronisatiefout"; }
-  else               { dot.className="sync-dot amber"; lbl.textContent="Synchroniseren…"; }
+  else                  { dot.className="sync-dot amber"; lbl.textContent="Synchroniseren…"; }
 }
 
 function renderAll() { renderTabs(); renderTable(); updateCount(); }
@@ -329,7 +325,6 @@ function renderTabs() {
 function renderTable() {
   const t = getTableDef(activeTab);
   if (!t) return;
-
   const hdr = `<div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
     <span style="font-size:19px">${t.icon}</span>
     <span class="table-card-title" style="color:${t.color}">${t.label}</span>
@@ -355,19 +350,9 @@ function renderTable() {
   const trs = rowList.map(row => {
     const cells = t.cols.map(c => {
       const ph = c.key==="wie" && yourName ? yourName : c.label+"…";
-      return `<td><input
-        type="text"
-        value="${esc(row[c.key]||"")}"
-        placeholder="${ph}"
-        data-tid="${t.id}"
-        data-lid="${row.localId}"
-        data-col="${c.key}"
-      /></td>`;
+      return `<td><input type="text" value="${esc(row[c.key]||"")}" placeholder="${ph}" data-tid="${t.id}" data-lid="${row.localId}" data-col="${c.key}"/></td>`;
     }).join("");
-    return `<tr>
-      ${cells}
-      <td style="text-align:center"><button class="del-btn" data-tid="${t.id}" data-lid="${row.localId}">×</button></td>
-    </tr>`;
+    return `<tr>${cells}<td style="text-align:center"><button class="del-btn" data-tid="${t.id}" data-lid="${row.localId}">×</button></td></tr>`;
   }).join("");
 
   document.getElementById("table-area").innerHTML = `<div class="table-card">${hdr}
@@ -375,7 +360,6 @@ function renderTable() {
     <button class="add-row-btn" id="add-row-btn">＋ Rij toevoegen</button>
   </div>`;
 
-  // Attach events — stable, no inline handlers
   document.querySelectorAll("#table-area input[data-lid]").forEach(inp => {
     inp.addEventListener("focus", onCellFocus);
     inp.addEventListener("input", onCellInput);
@@ -396,7 +380,6 @@ function updateCount() {
   document.getElementById("send-btn").disabled = total===0 || !configOk;
 }
 
-// ── Cell events ───────────────────────────────────────────────
 function onCellFocus(e) {
   const {tid, lid, col} = e.target.dataset;
   if (col==="wie" && !e.target.value && yourName) {
@@ -419,20 +402,15 @@ function onCellInput(e) {
 function onCellBlur(e) {
   const {tid, lid, col} = e.target.dataset;
   const row = rows[tid]?.get(lid);
-  if (row) row[col] = e.target.value; // capture final value
+  if (row) row[col] = e.target.value;
 }
 
-// ── Tab / row management ──────────────────────────────────────
-function switchTab(id) {
-  activeTab = id;
-  renderAll();
-}
+function switchTab(id) { activeTab = id; renderAll(); }
 
 function addRow(tid) {
   const id = uid();
   if (!rows[tid]) rows[tid] = new Map();
   rows[tid].set(id, makeRow(tid, id));
-  // Append a single row to the existing tbody — don't re-render whole table
   const t = getTableDef(tid);
   const tbody = document.querySelector("#table-area tbody");
   if (!tbody) { renderTable(); return; }
@@ -444,14 +422,12 @@ function addRow(tid) {
   const tr = document.createElement("tr");
   tr.innerHTML = cells + `<td style="text-align:center"><button class="del-btn" data-tid="${tid}" data-lid="${id}">×</button></td>`;
   tbody.appendChild(tr);
-  // Attach events to new inputs
   tr.querySelectorAll("input[data-lid]").forEach(inp => {
     inp.addEventListener("focus", onCellFocus);
     inp.addEventListener("input", onCellInput);
     inp.addEventListener("blur",  onCellBlur);
   });
   tr.querySelector(".del-btn").addEventListener("click", () => deleteRow(tid, id));
-  // Focus first cell
   tr.querySelector("input")?.focus();
 }
 
@@ -461,15 +437,9 @@ async function deleteRow(tid, lid) {
     try { await sb.from("handover_entries").delete().eq("id", row.dbId); } catch(e) {}
   }
   rows[tid]?.delete(lid);
-  // Ensure at least 3 empty rows
   const t = getTableDef(tid);
   if (t && !t.simple) {
-    const filled = [...(rows[tid]||new Map()).values()].filter(r=>rowHasData(tid,r)).length;
-    const total  = (rows[tid]||new Map()).size;
-    while ((rows[tid]||new Map()).size < 3) {
-      const id = uid();
-      rows[tid].set(id, makeRow(tid, id));
-    }
+    while ((rows[tid]||new Map()).size < 3) { const id=uid(); rows[tid].set(id, makeRow(tid, id)); }
   }
   renderAll();
 }
@@ -482,7 +452,6 @@ async function clearAll() {
   showToast("Alle invoer gewist.", "");
 }
 
-// ── Name modal ────────────────────────────────────────────────
 function openNameModal() {
   document.getElementById("name-input").value = yourName;
   document.getElementById("name-modal").classList.add("open");
@@ -496,7 +465,6 @@ function saveName() {
 }
 document.getElementById("name-modal").addEventListener("click", e => { if(e.target===e.currentTarget) e.currentTarget.classList.remove("open"); });
 
-// ── Meta ──────────────────────────────────────────────────────
 function readMeta() {
   return {
     datum:  document.getElementById("meta-datum").value,
@@ -519,7 +487,6 @@ function bindMeta() {
   });
 }
 
-// ── PDF ───────────────────────────────────────────────────────
 function generatePDF() {
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -574,7 +541,6 @@ function generatePDF() {
   return doc;
 }
 
-// ── Send ──────────────────────────────────────────────────────
 async function handleSend() {
   if (!configOk){showToast("⚠️ Vul eerst de configuratie in.","warn");return;}
   if (PA_TRIGGER_URL==="PASTE_YOUR_POWER_AUTOMATE_URL_HERE"){showToast("⚠️ Vul de Power Automate URL in.","warn");return;}
@@ -596,7 +562,6 @@ async function handleSend() {
     lbl.textContent="✓ Verstuurd!"; btn.style.background="linear-gradient(135deg,#34D399,#059669)";
     showToast("✅ Dagrapport verstuurd!","success");
     doc.save(fname);
-    // Reset
     if (sb) try { await sb.from("handover_entries").delete().eq("handover_date",todayStr()); } catch(e) {}
     initState();
     ["meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>document.getElementById(id).value="");
@@ -608,7 +573,6 @@ async function handleSend() {
   }
 }
 
-// ── Utilities ─────────────────────────────────────────────────
 function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 let toastTimer;
 function showToast(msg,type){
@@ -616,7 +580,6 @@ function showToast(msg,type){
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.className="",6000);
 }
 
-// ── Init ──────────────────────────────────────────────────────
 if (yourName) document.getElementById("name-badge").textContent = `👤 ${yourName}`;
 initState();
 bindMeta();
