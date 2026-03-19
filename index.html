@@ -272,6 +272,15 @@ async function bgSync() {
       } else {
         const localRow = rows[tid].get(localId);
         if (!localRow.dbId) { localRow.dbId = item.id; }
+        // Update columns that are empty locally but filled remotely
+        if (!localRow.dirty) {
+          t.cols.forEach(c => {
+            if (!localRow[c.key] && item.row_data?.[c.key]) {
+              localRow[c.key] = item.row_data[c.key];
+              changed = true;
+            }
+          });
+        }
       }
     });
 
@@ -588,6 +597,7 @@ renderAll();
 if (configOk) {
   bgSync();
   setInterval(bgSync, 7000);
+  setTimeout(bgSync, 1000);
   setSyncStatus("ok");
 } else {
   setSyncStatus("error");
