@@ -240,7 +240,6 @@ async function bgSync() {
       if (tid === "_clear") {
         if (!window._clearedAlready) {
           window._clearedAlready = true;
-          if (sb) sb.from("handover_entries").delete().eq("table_id", "_clear").eq("handover_date", todayStr()).then(() => {});
           initState();
           renderAll();
           showToast("Invoer gewist door een collega.", "warn");
@@ -469,6 +468,7 @@ async function clearAll() {
   if (sb) try { await sb.from("handover_entries").delete().eq("handover_date", todayStr()); } catch(e) {}
   // Insert a special "clear" signal so other users pick it up via bgSync
   if (sb) try { await sb.from("handover_entries").insert({table_id:"_clear", row_data:{cleared:true}, handover_date:todayStr(), local_id:"_clear"}); } catch(e) {}
+  setTimeout(async () => { if (sb) try { await sb.from("handover_entries").delete().eq("local_id","_clear").eq("handover_date",todayStr()); } catch(e) {} }, 7000);
   initState();
   renderAll();
   showToast("Alle invoer gewist.", "");
