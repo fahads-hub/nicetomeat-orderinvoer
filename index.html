@@ -297,7 +297,7 @@ const saveTimers = {};
 function scheduleSave(tid, row) {
   setSyncStatus("loading");
   clearTimeout(saveTimers[row.localId]);
-  saveTimers[row.localId] = setTimeout(() => saveRowToDb(tid, row), 900);
+  saveTimers[row.localId] = setTimeout(() => saveRowToDb(tid, row), 300);
 }
 
 function setSyncStatus(s) {
@@ -587,7 +587,7 @@ renderAll();
 
 if (configOk) {
   bgSync();
-  setInterval(bgSync, 7000);
+  const channel = sb.channel('handover').on('postgres_changes', { event: '*', schema: 'public', table: 'handover_entries' }, () => bgSync()).subscribe();
   setSyncStatus("ok");
 } else {
   setSyncStatus("error");
