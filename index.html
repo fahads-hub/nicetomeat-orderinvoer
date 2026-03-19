@@ -587,7 +587,7 @@ renderAll();
 
 if (configOk) {
   bgSync();
-  const channel = sb.channel('handover').on('postgres_changes', { event: '*', schema: 'public', table: 'handover_entries' }, () => { setTimeout(bgSync, 1500); }).subscribe();
+  const channel = sb.channel('handover').on('postgres_changes', { event: '*', schema: 'public', table: 'handover_entries' }, () => { setTimeout(bgSync, 1000); }).subscribe();
   setSyncStatus("ok");
 } else {
   setSyncStatus("error");
