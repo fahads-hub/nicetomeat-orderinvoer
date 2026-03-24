@@ -373,7 +373,7 @@ async function saveRowToDb(tid, row) {
   const t = getTableDef(tid);
   const rowData = {};
   t.cols.forEach(c => rowData[c.key]=row[c.key]||"");
-  const payload = { table_id:tid, row_data:rowData, handover_date:currentEntryDate, local_id:row.localId };
+  const payload = { table_id:tid, row_data:rowData, handover_date:currentEntryDate, local_id:row.localId, entry_id:currentEntryId };
   try {
     if (row.dbId) { await sb.from("handover_entries").update(payload).eq("id",row.dbId); }
     else { const {data,error}=await sb.from("handover_entries").insert(payload).select().single(); if(!error&&data) row.dbId=data.id; }
