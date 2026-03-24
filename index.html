@@ -653,7 +653,8 @@ async function handleSend(){
     lbl.textContent="✓ Verstuurd!";btn.style.background="linear-gradient(135deg,#34D399,#059669)";
     showToast("✅ Dagrapport verstuurd!","success");
     doc.save(fname);
-    setTimeout(()=>{lbl.textContent="📩 Dagrapport versturen";btn.style.background="";btn.disabled=false;},6000);
+    await sb.from("handover_entries").delete().eq("entry_id", currentEntryId);
+    setTimeout(()=>{ goToDashboard(); }, 2000);
   }catch(e){
     console.error(e);lbl.textContent="📩 Dagrapport versturen";btn.disabled=false;
     showToast("❌ Versturen mislukt.","error");
