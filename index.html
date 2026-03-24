@@ -322,7 +322,7 @@ async function deleteEntry(entryId) {
 // ── OPEN ENTRY ────────────────────────────────────────────────
 function openEntry(dateStr, entryId) {
   currentEntryDate = dateStr;
-  currentEntryId = entryId || dateStr; // fallback for old entries
+  currentEntryId = entryId;
   firstSync = true;
   rows = {};
   simples = {};
