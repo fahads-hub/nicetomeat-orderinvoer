@@ -607,7 +607,7 @@ document.getElementById("name-input").addEventListener("keydown",e=>{if(e.key===
 // ── PDF ───────────────────────────────────────────────────────
 function generatePDF() {
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4",compress:true});
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4",compress:false,putOnlyUsedFonts:true,floatPrecision:2});
 
   // Set properties FIRST for Outlook preview
   doc.setProperties({
@@ -615,7 +615,8 @@ function generatePDF() {
     subject:"Dagrapport",
     author:"Orderinvoer Team",
     keywords:"dagrapport,orderinvoer",
-    creator:"jsPDF"
+    creator:"jsPDF",
+    pdfVersion:"1.4"
   });
 
   const W=doc.internal.pageSize.getWidth();
