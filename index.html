@@ -307,6 +307,8 @@ function goToDashboard() {
   document.getElementById("clear-btn").style.display = "none";
   document.getElementById("back-btn").style.display = "none";
   document.getElementById("send-btn").style.display = "none";
+  ["meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("meta-datum").value="";
   loadDashboard();
 }
 
@@ -654,7 +656,12 @@ async function handleSend(){
     showToast("✅ Dagrapport verstuurd!","success");
     doc.save(fname);
     await sb.from("handover_entries").delete().eq("entry_id", currentEntryId);
-    setTimeout(()=>{ goToDashboard(); }, 2000);
+    setTimeout(()=>{
+      lbl.textContent="📩 Dagrapport versturen";
+      btn.style.background="";
+      btn.disabled=false;
+      goToDashboard();
+    }, 2000);
   }catch(e){
     console.error(e);lbl.textContent="📩 Dagrapport versturen";btn.disabled=false;
     showToast("❌ Versturen mislukt.","error");
