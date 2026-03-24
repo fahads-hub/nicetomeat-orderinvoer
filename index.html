@@ -142,6 +142,7 @@ const TABLES = [
   </div>
   <div class="header-actions">
     <span id="entry-count" style="display:none;font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px">0 items</span>
+    <button id="back-btn" style="display:none" onclick="goToDashboard()" class="btn btn-ghost">← Terug</button>
     <button id="name-badge" onclick="openNameModal()">👤 Naam instellen</button>
     <button class="btn btn-danger" id="clear-btn" style="display:none" onclick="clearAll()">🗑 Alles wissen</button>
     <button class="btn btn-primary" id="send-btn" style="display:none" onclick="handleSend()" disabled>
@@ -304,6 +305,7 @@ function goToDashboard() {
   document.getElementById("entry-view").style.display = "none";
   document.getElementById("entry-count").style.display = "none";
   document.getElementById("clear-btn").style.display = "none";
+  document.getElementById("back-btn").style.display = "none";
   document.getElementById("send-btn").style.display = "none";
   loadDashboard();
 }
@@ -330,6 +332,7 @@ function openEntry(dateStr, entryId) {
   document.getElementById("entry-view").style.display = "block";
   document.getElementById("entry-count").style.display = "inline-flex";
   document.getElementById("clear-btn").style.display = "inline-flex";
+  document.getElementById("back-btn").style.display = "inline-flex";
   document.getElementById("send-btn").style.display = "inline-flex";
 
   initState();
