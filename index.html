@@ -659,8 +659,13 @@ function generatePDF() {
       body:rl.map(row=>t.cols.map(c=>row[c.key]||"")),
       theme:"grid",
       headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:8,fontStyle:"bold"},
-      bodyStyles:{textColor:[40,45,70],fontSize:8.5,lineColor:[220,222,230]},
+      bodyStyles:{textColor:[40,45,70],fontSize:8.5,lineColor:[220,222,230],cellPadding:3},
       alternateRowStyles:{fillColor:[248,249,252]},
+      columnStyles:{
+        0:{cellWidth:38},
+        2:{cellWidth:18},
+        3:{cellWidth:22},
+      },
       margin:{left:14,right:14},
     });
     y=doc.lastAutoTable.finalY+7;
