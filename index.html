@@ -658,16 +658,16 @@ function generatePDF() {
       head:[t.cols.map(c=>c.label)],
       body:rl.map(row=>t.cols.map(c=>row[c.key]||"")),
       theme:"grid",
-      headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:8,fontStyle:"bold"},
-      bodyStyles:{textColor:[40,45,70],fontSize:8.5,lineColor:[220,222,230],cellPadding:3},
+      headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:11,fontStyle:"bold"},
+      bodyStyles:{textColor:[40,45,70],fontSize:10.5,lineColor:[220,222,230],cellPadding:3},
       alternateRowStyles:{fillColor:[248,249,252]},
       columnStyles:{
-        0:{cellWidth:50},
-        1:{cellWidth:100},
-        2:{cellWidth:10},
-        3:{cellWidth:25},
+        0:{cellWidth:44},
+        1:{cellWidth:88},
+        2:{cellWidth:15},
+        3:{cellWidth:20},
       },
-      tableWidth:190,
+      tableWidth:167,
       margin:{left:14,right:14},
     });
     y=doc.lastAutoTable.finalY+7;
