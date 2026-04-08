@@ -187,6 +187,7 @@ const TABLES = [
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-style@0.8.13/dist/xlsx.full.min.js"></script>
 
 <script>
 'use strict';
@@ -626,17 +627,43 @@ function generatePDF(){
 
 // ── Generate Excel from SQL data using SheetJS ────────────────
 function generateExcelBase64(sqlData){
-  const ws = XLSX.utils.json_to_sheet(sqlData);
-  // Auto column widths
-  const cols = Object.keys(sqlData[0]||{});
+  // Clean up date fields
+  const cleaned = sqlData.map(row => {
+    const r = {...row};
+    Object.keys(r).forEach(k => {
+      if (typeof r[k] === 'string' && /^\d{4}-\d{2}-\d{2}T00:00:00/.test(r[k])) {
+        r[k] = r[k].slice(0, 10);
+      }
+    });
+    return r;
+  });
+
+  const cols = Object.keys(cleaned[0]||{});
+  const ws = XLSX.utils.json_to_sheet(cleaned);
+
+  // Column widths
   ws["!cols"] = cols.map(key=>({
-    wch: Math.max(key.length, ...sqlData.map(r=>String(r[key]||"").length).slice(0,50))
+    wch: Math.max(key.length, ...cleaned.slice(0,50).map(r=>String(r[key]||"").length))
   }));
+
+  // Freeze header row
+  ws["!freeze"] = {xSplit:0, ySplit:1};
+
+  // Bold + styled header row
+  cols.forEach((key, i) => {
+    const cellRef = XLSX.utils.encode_cell({r:0, c:i});
+    if (ws[cellRef]) {
+      ws[cellRef].s = {
+        font: {bold: true, color: {rgb: "FFFFFF"}},
+        fill: {fgColor: {rgb: "1E2235"}},
+        alignment: {horizontal: "center"}
+      };
+    }
+  });
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Productie");
-  // Return as base64 string
-  const raw = XLSX.write(wb, {bookType:"xlsx", type:"base64"});
-  return raw;
+  return XLSX.write(wb, {bookType:"xlsx", type:"base64"});
 }
 
 async function handleSend(){
