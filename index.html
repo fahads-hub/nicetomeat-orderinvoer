@@ -187,7 +187,6 @@ const TABLES = [
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-style@0.8.13/dist/xlsx.full.min.js"></script>
 
 <script>
 'use strict';
@@ -639,7 +638,10 @@ function generateExcelBase64(sqlData){
   });
 
   const cols = Object.keys(cleaned[0]||{});
-  const ws = XLSX.utils.json_to_sheet(cleaned);
+
+  // Use aoa_to_sheet for clean output
+  const wsData = [cols, ...cleaned.map(row => cols.map(k => row[k]??''))];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Column widths
   ws["!cols"] = cols.map(key=>({
@@ -648,18 +650,6 @@ function generateExcelBase64(sqlData){
 
   // Freeze header row
   ws["!freeze"] = {xSplit:0, ySplit:1};
-
-  // Bold + styled header row
-  cols.forEach((key, i) => {
-    const cellRef = XLSX.utils.encode_cell({r:0, c:i});
-    if (ws[cellRef]) {
-      ws[cellRef].s = {
-        font: {bold: true, color: {rgb: "FFFFFF"}},
-        fill: {fgColor: {rgb: "1E2235"}},
-        alignment: {horizontal: "center"}
-      };
-    }
-  });
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Productie");
@@ -680,33 +670,29 @@ async function handleSend(){
       summary[t.label]=[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).map(r=>{const o={};t.cols.forEach(c=>o[c.label]=r[c.key]||"");return o;});
     });
 
-    // First call: get SQL data back from Power Automate
-    const res=await fetch(PA_TRIGGER_URL,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,requestExcel:true})
-    });
-    if(!res.ok)throw new Error("PA "+res.status);
-
-    // Try to parse SQL data from response and generate Excel
-    let excelB64=null;
-    try{
-      const resData=await res.json();
-      const sqlData=Array.isArray(resData)?resData:resData?.sqlData;
-      if(sqlData&&sqlData.length){
-        excelB64=generateExcelBase64(sqlData);
-      }
-    }catch(e){console.warn("Excel data niet ontvangen:",e);}
-
-    // If we got Excel data, send second call with Excel attached
-    if(excelB64){
-      const excelFname=`Productie_${(m.datum||todayNL()).replace(/\//g,"-")}.xlsx`;
-      await fetch(PA_TRIGGER_URL,{
+    // Step 1: get SQL data from Power Automate (requestExcel=true → True branch → Response)
+    let excelB64 = null;
+    let excelFname = `Productie_${(m.datum||todayNL()).replace(/\//g,"-")}.xlsx`;
+    try {
+      const res1 = await fetch(PA_TRIGGER_URL,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,excelBase64:excelB64,excelFilename:excelFname,sendEmail:true})
+        body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,requestExcel:true})
       });
-    }
+      if(res1.ok){
+        const resData = await res1.json();
+        const sqlData = Array.isArray(resData) ? resData : resData?.sqlData;
+        if(sqlData && sqlData.length) excelB64 = generateExcelBase64(sqlData);
+      }
+    } catch(e){ console.warn("Excel ophalen mislukt:",e); }
+
+    // Step 2: send email (sendEmail=true → True branch → sends email)
+    const res2 = await fetch(PA_TRIGGER_URL,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,sendEmail:true,excelBase64:excelB64,excelFilename:excelFname})
+    });
+    if(!res2.ok) throw new Error("PA "+res2.status);
 
     lbl.textContent="✓ Verstuurd!";btn.style.background="linear-gradient(135deg,#34D399,#059669)";
     toast("✅ Dagrapport verstuurd!","success");
