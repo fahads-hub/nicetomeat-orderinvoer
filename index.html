@@ -100,9 +100,9 @@ td input::placeholder{color:var(--muted)}
 <body>
 
 <script>
-const SUPABASE_URL   = "https://qlcxsgvkrnxhpsjcguok.supabase.co";
-const SUPABASE_KEY   = "sb_publishable_6WSJoSx_Str7088UT3NyHw_yal-THW0";
-const PA_TRIGGER_URL = "https://default057b68203f6c4bfbbed4178db3a988.03.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/10d34321e5614418bcaa73afebb02c52/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=EWX0UUSXWQFcFPj27J3aAkHAMf81G6QM7oGEby1lPKs";
+const SUPABASE_URL   = "https://...";
+const SUPABASE_KEY   = "sb_publishable_.....";
+const PA_TRIGGER_URL = "https://...";
 
 const TABLES = [
   { id:"bijzonderheden", label:"Bijzonderheden",           icon:"📋", color:"#4F8EF7",
@@ -134,7 +134,7 @@ const TABLES = [
   <div class="header-actions">
     <span id="entry-count" style="display:none;font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px">0 items</span>
     <button id="back-btn"  class="btn btn-ghost"   style="display:none" onclick="goHome()">← Terug</button>
-    <button id="name-badge" onclick="openModal('name-modal')">👤 Naam instellen</button>
+    <button id="name-badge" onclick="openNameModal()">👤 Naam instellen</button>
     <button id="clear-btn" class="btn btn-danger"  style="display:none" onclick="clearAll()">🗑 Alles wissen</button>
     <button id="send-btn"  class="btn btn-primary" style="display:none" onclick="handleSend()" disabled>
       <span id="send-label">📩 Dagrapport versturen</span>
@@ -193,16 +193,18 @@ const TABLES = [
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let yourName     = localStorage.getItem("handover-name") || "";
-let entryDate    = null;
-let entryId      = null;
-let activeTab    = TABLES[0].id;
-let firstSync    = true;
-let syncTimer    = null;
-let metaTimer    = null;
-const saveTimers = {};
-let rows         = {};
-let simples      = {};
+let yourName        = localStorage.getItem("handover-name") || "";
+let entryDate       = null;
+let entryId         = null;
+let activeTab       = TABLES[0].id;
+let firstSync       = true;
+let syncTimer       = null;
+let metaTimer       = null;
+const saveTimers    = {};
+const simpleTimers  = {};
+let rows            = {};
+let simples         = {};
+let isSending       = false;
 
 const uid      = () => crypto.randomUUID();
 const todayStr = () => new Date().toISOString().slice(0,10);
@@ -214,30 +216,45 @@ const hasData  = (tid,row) => { const t=tbl(tid); return t&&t.cols.some(c=>(row[
 const makeRow  = (tid,lid) => { const r={localId:lid,dbId:null,dirty:false}; tbl(tid).cols.forEach(c=>r[c.key]=""); return r; };
 
 function initState() {
-  rows={}; simples={};
+  rows = {};
+  simples = {};
   TABLES.forEach(t=>{
-    if(t.simple){simples[t.id]="";return;}
-    rows[t.id]=new Map();
-    for(let i=0;i<3;i++){const id=uid();rows[t.id].set(id,makeRow(t.id,id));}
+    if(t.simple){
+      simples[t.id] = "";
+      return;
+    }
+    rows[t.id] = new Map();
+    for(let i=0;i<3;i++){
+      const id = uid();
+      rows[t.id].set(id, makeRow(t.id,id));
+    }
   });
 }
 
 const openModal  = id => document.getElementById(id).classList.add("open");
 const closeModal = id => document.getElementById(id).classList.remove("open");
-document.querySelectorAll(".modal-overlay").forEach(el=>
-  el.addEventListener("click",e=>{if(e.target===el)el.classList.remove("open");})
-);
+
+document.querySelectorAll(".modal-overlay").forEach(el=>{
+  el.addEventListener("click",e=>{
+    if(e.target===el) el.classList.remove("open");
+  });
+});
 
 function setSyncStatus(s){
   const dot=document.getElementById("sync-dot"),lbl=document.getElementById("sync-label");
-  const map={ok:["sync-dot","Live gesynchroniseerd"],error:["sync-dot red","Synchronisatiefout"],loading:["sync-dot amber","Synchroniseren…"]};
+  const map={
+    ok:["sync-dot","Live gesynchroniseerd"],
+    error:["sync-dot red","Synchronisatiefout"],
+    loading:["sync-dot amber","Synchroniseren…"]
+  };
   [dot.className,lbl.textContent]=map[s]||map.ok;
 }
 
 let toastTimer;
 function toast(msg,type=""){
   const el=document.getElementById("toast");
-  el.textContent=msg;el.className="show "+type;
+  el.textContent=msg;
+  el.className="show "+type;
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>el.className="",5000);
 }
@@ -245,35 +262,49 @@ function toast(msg,type=""){
 async function loadDashboard(){
   setSyncStatus("loading");
   try{
-    const{data,error}=await sb.from("handover_entries")
+    const { data, error } = await sb
+      .from("handover_entries")
       .select("handover_date,table_id,row_data,entry_id")
       .not("table_id","in","(_clear,_meta)")
       .not("entry_id","is",null);
-    if(error)throw error;
+
+    if(error) throw error;
 
     const byEntry={};
+
     data.forEach(item=>{
       const eid=item.entry_id;
-      if(!byEntry[eid])byEntry[eid]={date:item.handover_date,counts:{},total:0};
-      const t=tbl(item.table_id);if(!t)return;
+      if(!byEntry[eid]) byEntry[eid]={date:item.handover_date,counts:{},total:0};
+
+      const t=tbl(item.table_id);
+      if(!t) return;
+
       if(t.simple){
-        if((item.row_data?.text||"").trim()){byEntry[eid].counts[t.id]=(byEntry[eid].counts[t.id]||0)+1;byEntry[eid].total++;}
-      }else if(item.row_data&&t.cols.some(c=>(item.row_data[c.key]||"").trim())){
-        byEntry[eid].counts[t.id]=(byEntry[eid].counts[t.id]||0)+1;byEntry[eid].total++;
+        if((item.row_data?.text||"").trim()){
+          byEntry[eid].counts[t.id]=(byEntry[eid].counts[t.id]||0)+1;
+          byEntry[eid].total++;
+        }
+      }else if(item.row_data && t.cols.some(c=>(item.row_data[c.key]||"").trim())){
+        byEntry[eid].counts[t.id]=(byEntry[eid].counts[t.id]||0)+1;
+        byEntry[eid].total++;
       }
     });
 
     const sorted=Object.entries(byEntry).sort((a,b)=>b[1].date.localeCompare(a[1].date));
-    const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
-    const tomorrowStr=tomorrow.toISOString().slice(0,10);
+    const tomorrow=new Date();
+    tomorrow.setDate(tomorrow.getDate()+1);
+    const tomorrowIso=tomorrow.toISOString().slice(0,10);
 
     let html=`<div class="entry-card entry-card-new" onclick="startNewEntry()"><div class="plus">＋</div><div>Nieuw dagrapport</div></div>`;
+
     sorted.forEach(([eid,info])=>{
-      const isTomorrow=info.date===tomorrowStr;
+      const isTomorrow=info.date===tomorrowIso;
       const chips=Object.entries(info.counts).slice(0,3).map(([tid,cnt])=>{
-        const t=tbl(tid);return t?`<span class="entry-chip">${t.icon} ${cnt}</span>`:"";
+        const t=tbl(tid);
+        return t?`<span class="entry-chip">${t.icon} ${cnt}</span>`:"";
       }).join("");
-      html+=`<div class="entry-card" onclick="openEntry('${info.date}','${eid}')">
+
+      html += `<div class="entry-card" onclick="openEntry('${info.date}','${eid}')">
         <button class="entry-card-del" onclick="event.stopPropagation();deleteEntry('${eid}')">🗑</button>
         <div class="entry-card-date">${dateToNL(info.date)} ${isTomorrow?'<span class="active-badge">Morgen</span>':''}</div>
         <div class="entry-card-meta">${info.total} item${info.total!==1?"s":""}</div>
@@ -284,143 +315,392 @@ async function loadDashboard(){
     document.getElementById("entries-grid").innerHTML=html;
     setSyncStatus("ok");
   }catch(e){
-    console.error(e);setSyncStatus("error");
+    console.error(e);
+    setSyncStatus("error");
     document.getElementById("entries-grid").innerHTML=`<div style="color:var(--red)">Laden mislukt.</div>`;
   }
 }
 
 async function deleteEntry(eid){
-  if(!confirm("Dit rapport verwijderen?"))return;
-  try{await sb.from("handover_entries").delete().eq("entry_id",eid);loadDashboard();toast("Rapport verwijderd.");}
-  catch(e){toast("Verwijderen mislukt.","error");}
+  if(!confirm("Dit rapport verwijderen?")) return;
+
+  try{
+    const { error } = await sb.from("handover_entries").delete().eq("entry_id", eid);
+    if(error) throw error;
+
+    await loadDashboard();
+    toast("Rapport verwijderd.");
+  }catch(e){
+    console.error(e);
+    toast("Verwijderen mislukt.","error");
+  }
 }
 
 function goHome(){
-  entryDate=null;entryId=null;firstSync=true;
-  clearInterval(syncTimer);syncTimer=null;
-  window._clearedAlready=false;
-  ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>document.getElementById(id).style.display="none");
+  entryDate = null;
+  entryId = null;
+  activeTab = TABLES[0].id;
+  firstSync = true;
+  isSending = false;
+
+  clearInterval(syncTimer);
+  syncTimer = null;
+
+  clearTimeout(metaTimer);
+  Object.keys(saveTimers).forEach(k=>clearTimeout(saveTimers[k]));
+  Object.keys(simpleTimers).forEach(k=>clearTimeout(simpleTimers[k]));
+
+  window._clearedAlready = false;
+
+  ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>{
+    document.getElementById(id).style.display="none";
+  });
+
   document.getElementById("dashboard").style.display="block";
   document.getElementById("entry-view").style.display="none";
-  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>document.getElementById(id).value="");
+
+  ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>{
+    document.getElementById(id).value="";
+  });
+
   loadDashboard();
 }
 
 function startNewEntry(){
-  const tomorrow=new Date();tomorrow.setDate(tomorrow.getDate()+1);
+  const tomorrow=new Date();
+  tomorrow.setDate(tomorrow.getDate()+1);
   const ts=tomorrow.toISOString().slice(0,10);
   const dp=document.getElementById("date-picker");
-  dp.value=ts;dp.min=ts;
+  dp.value=ts;
+  dp.min=ts;
   openModal("date-modal");
 }
 
 function confirmNewEntry(){
   const val=document.getElementById("date-picker").value;
-  if(!val){toast("Kies een datum.","warn");return;}
+  if(!val){
+    toast("Kies een datum.","warn");
+    return;
+  }
   closeModal("date-modal");
   openEntry(val,uid());
 }
 
 function openEntry(date,eid){
-  entryDate=date;entryId=eid;
-  firstSync=true;window._clearedAlready=false;
-  rows={};simples={};activeTab=TABLES[0].id;
+  entryDate = date;
+  entryId = eid;
+  activeTab = TABLES[0].id;
+  firstSync = true;
+  isSending = false;
+  window._clearedAlready = false;
+
+  rows = {};
+  simples = {};
+
   document.getElementById("dashboard").style.display="none";
   document.getElementById("entry-view").style.display="block";
-  ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>document.getElementById(id).style.display="inline-flex");
-  initState();bindMeta(date);renderAll();bgSync();
+  ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>{
+    document.getElementById(id).style.display="inline-flex";
+  });
+
+  initState();
+  bindMeta(date);
+  renderAll();
+  bgSync();
+
   clearInterval(syncTimer);
-  syncTimer=setInterval(bgSync,7000);
+  syncTimer = setInterval(bgSync,7000);
   setTimeout(bgSync,1000);
 }
 
 async function saveRow(tid,row){
-  if(!entryId||!hasData(tid,row))return;
-  const t=tbl(tid),rd={};
-  t.cols.forEach(c=>rd[c.key]=row[c.key]||"");
-  const payload={table_id:tid,row_data:rd,handover_date:entryDate,local_id:row.localId,entry_id:entryId};
+  if(!entryId) return;
+
   try{
-    if(row.dbId)await sb.from("handover_entries").update(payload).eq("id",row.dbId);
-    else{const{data,error}=await sb.from("handover_entries").insert(payload).select("id").single();if(!error&&data)row.dbId=data.id;}
-    row.dirty=false;setSyncStatus("ok");
-  }catch(e){setSyncStatus("error");}
+    const rowHasData = hasData(tid,row);
+
+    if(!rowHasData){
+      if(row.dbId){
+        const { error } = await sb.from("handover_entries").delete().eq("id", row.dbId);
+        if(error) throw error;
+        row.dbId = null;
+      }
+      row.dirty = false;
+      setSyncStatus("ok");
+      return;
+    }
+
+    const t=tbl(tid), rd={};
+    t.cols.forEach(c=>rd[c.key]=row[c.key]||"");
+
+    const payload={
+      table_id:tid,
+      row_data:rd,
+      handover_date:entryDate,
+      local_id:row.localId,
+      entry_id:entryId
+    };
+
+    if(row.dbId){
+      const { error } = await sb.from("handover_entries").update(payload).eq("id", row.dbId);
+      if(error) throw error;
+    }else{
+      const { data, error } = await sb.from("handover_entries").insert(payload).select("id").single();
+      if(error) throw error;
+      if(data) row.dbId=data.id;
+    }
+
+    row.dirty=false;
+    setSyncStatus("ok");
+  }catch(e){
+    console.error(e);
+    setSyncStatus("error");
+    throw e;
+  }
 }
 
 async function saveSimple(tid,val){
-  if(!entryId)return;
+  if(!entryId) return;
+
   try{
-    const{data:ex}=await sb.from("handover_entries").select("id").eq("entry_id",entryId).eq("table_id",tid);
-    if(ex?.length)await sb.from("handover_entries").update({row_data:{text:val}}).eq("id",ex[0].id);
-    else await sb.from("handover_entries").insert({table_id:tid,row_data:{text:val},handover_date:entryDate,local_id:tid,entry_id:entryId});
-  }catch(e){}
+    const { data: ex, error: selErr } = await sb
+      .from("handover_entries")
+      .select("id")
+      .eq("entry_id", entryId)
+      .eq("table_id", tid)
+      .limit(1);
+
+    if(selErr) throw selErr;
+
+    if(ex?.length){
+      const { error } = await sb
+        .from("handover_entries")
+        .update({ row_data:{ text:val } })
+        .eq("id", ex[0].id);
+
+      if(error) throw error;
+    }else{
+      const { error } = await sb.from("handover_entries").insert({
+        table_id:tid,
+        row_data:{ text:val },
+        handover_date:entryDate,
+        local_id:tid,
+        entry_id:entryId
+      });
+
+      if(error) throw error;
+    }
+
+    setSyncStatus("ok");
+  }catch(e){
+    console.error(e);
+    setSyncStatus("error");
+    throw e;
+  }
 }
 
 async function saveMeta(m){
-  if(!entryId)return;
+  if(!entryId) return;
+
   try{
-    const{data:ex}=await sb.from("handover_entries").select("id").eq("entry_id",entryId).eq("table_id","_meta");
-    if(ex?.length)await sb.from("handover_entries").update({row_data:m}).eq("id",ex[0].id);
-    else await sb.from("handover_entries").insert({table_id:"_meta",row_data:m,handover_date:entryDate,local_id:"_meta",entry_id:entryId});
-  }catch(e){}
+    const { data: ex, error: selErr } = await sb
+      .from("handover_entries")
+      .select("id")
+      .eq("entry_id", entryId)
+      .eq("table_id", "_meta")
+      .limit(1);
+
+    if(selErr) throw selErr;
+
+    if(ex?.length){
+      const { error } = await sb
+        .from("handover_entries")
+        .update({ row_data:m })
+        .eq("id", ex[0].id);
+
+      if(error) throw error;
+    }else{
+      const { error } = await sb.from("handover_entries").insert({
+        table_id:"_meta",
+        row_data:m,
+        handover_date:entryDate,
+        local_id:"_meta",
+        entry_id:entryId
+      });
+
+      if(error) throw error;
+    }
+
+    setSyncStatus("ok");
+  }catch(e){
+    console.error(e);
+    setSyncStatus("error");
+    throw e;
+  }
 }
 
 function scheduleSave(tid,row){
   setSyncStatus("loading");
   clearTimeout(saveTimers[row.localId]);
-  saveTimers[row.localId]=setTimeout(()=>saveRow(tid,row),900);
+  saveTimers[row.localId]=setTimeout(async ()=>{
+    try{
+      await saveRow(tid,row);
+    }catch(e){}
+  },900);
 }
 
 async function bgSync(){
-  if(!entryId)return;
+  if(!entryId) return;
+
   try{
-    const{data,error}=await sb.from("handover_entries").select("*").eq("entry_id",entryId);
-    if(error)throw error;
+    const { data, error } = await sb.from("handover_entries").select("*").eq("entry_id", entryId);
+    if(error) throw error;
+
     let changed=false;
-    data.forEach(item=>{
+    const remoteSeen={};
+
+    TABLES.forEach(t=>{
+      if(!t.simple) remoteSeen[t.id]=new Set();
+    });
+
+    if(firstSync){
+      TABLES.forEach(t=>{
+        if(t.simple) return;
+        rows[t.id]=new Map();
+      });
+    }
+
+    for(const item of data){
       const tid=item.table_id;
+
       if(tid==="_clear"){
-        if(!window._clearedAlready){window._clearedAlready=true;initState();renderAll();toast("Invoer gewist door een collega.","warn");}
-        return;
+        if(!window._clearedAlready){
+          window._clearedAlready=true;
+          initState();
+          renderAll();
+          toast("Invoer gewist door een collega.","warn");
+        }
+        continue;
       }
+
       if(tid==="_meta"){
-        const m=item.row_data;if(!m)return;
-        const f={datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
-        Object.entries(f).forEach(([k,id])=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=m[k]||"";});
-        return;
+        const m=item.row_data;
+        if(!m) continue;
+
+        const f={
+          datum:"meta-datum",
+          naam:"meta-naam",
+          tijd:"meta-tijd",
+          emails:"meta-emails",
+          wstr:"meta-wstr",
+          wsoph:"meta-wsoph",
+          wscc:"meta-wscc"
+        };
+
+        Object.entries(f).forEach(([k,id])=>{
+          const el=document.getElementById(id);
+          if(el && document.activeElement!==el) el.value=m[k]||"";
+        });
+        continue;
       }
-      const t=tbl(tid);if(!t)return;
+
+      const t=tbl(tid);
+      if(!t) continue;
+
       if(t.simple){
         const ta=document.getElementById("simple-ta-"+tid);
-        if(!ta||document.activeElement!==ta){const nv=item.row_data?.text||"";if(simples[tid]!==nv){simples[tid]=nv;changed=true;}}
-        return;
+        const nv=item.row_data?.text||"";
+
+        if((!ta || document.activeElement!==ta) && simples[tid]!==nv){
+          simples[tid]=nv;
+          changed=true;
+        }
+        continue;
       }
-      if(firstSync&&rows[tid])rows[tid]=new Map();
-      if(!rows[tid])rows[tid]=new Map();
+
+      if(!rows[tid]) rows[tid]=new Map();
+
       const lid=item.local_id||item.id;
+      remoteSeen[tid].add(lid);
+
       if(!rows[tid].has(lid)){
         const rd={localId:lid,dbId:item.id,dirty:false};
         t.cols.forEach(c=>rd[c.key]=item.row_data?.[c.key]||"");
-        rows[tid].set(lid,rd);changed=true;
+        rows[tid].set(lid,rd);
+        changed=true;
       }else{
         const lr=rows[tid].get(lid);
-        if(!lr.dbId)lr.dbId=item.id;
-        if(!lr.dirty)t.cols.forEach(c=>{if(!lr[c.key]&&item.row_data?.[c.key]){lr[c.key]=item.row_data[c.key];changed=true;}});
+        if(!lr.dbId) lr.dbId=item.id;
+
+        if(!lr.dirty){
+          t.cols.forEach(c=>{
+            const remoteVal=item.row_data?.[c.key]||"";
+            if(lr[c.key]!==remoteVal){
+              lr[c.key]=remoteVal;
+              changed=true;
+            }
+          });
+        }
+      }
+    }
+
+    TABLES.forEach(t=>{
+      if(t.simple) return;
+      if(!rows[t.id]) rows[t.id]=new Map();
+
+      for(const [lid,row] of rows[t.id]){
+        const isDbBacked=!!row.dbId;
+        const stillExistsRemotely=remoteSeen[t.id].has(lid);
+
+        if(isDbBacked && !stillExistsRemotely && !row.dirty){
+          rows[t.id].delete(lid);
+          changed=true;
+        }
       }
     });
+
     if(firstSync){
-      TABLES.forEach(t=>{if(t.simple)return;if(!rows[t.id])rows[t.id]=new Map();while(rows[t.id].size<3){const id=uid();rows[t.id].set(id,makeRow(t.id,id));}});
-      firstSync=false;changed=true;
+      TABLES.forEach(t=>{
+        if(t.simple) return;
+        if(!rows[t.id]) rows[t.id]=new Map();
+        while(rows[t.id].size<3){
+          const id=uid();
+          rows[t.id].set(id,makeRow(t.id,id));
+        }
+      });
+      firstSync=false;
+      changed=true;
+    }else{
+      TABLES.forEach(t=>{
+        if(t.simple) return;
+        while(rows[t.id].size<3){
+          const id=uid();
+          rows[t.id].set(id,makeRow(t.id,id));
+          changed=true;
+        }
+      });
     }
-    if(changed)renderAll();
+
+    if(changed) renderAll();
     setSyncStatus("ok");
-  }catch(e){console.error(e);setSyncStatus("error");}
+  }catch(e){
+    console.error(e);
+    setSyncStatus("error");
+  }
 }
 
-function renderAll(){renderTabs();renderTable();updateCount();}
+function renderAll(){
+  renderTabs();
+  renderTable();
+  updateCount();
+}
 
 function renderTabs(){
   document.getElementById("tab-bar").innerHTML=TABLES.map(t=>{
-    const count=t.simple?(simples[t.id]?.trim()?1:0):[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).length;
+    const count=t.simple
+      ? (simples[t.id]?.trim()?1:0)
+      : [...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).length;
+
     return `<button class="tab${t.id===activeTab?" active":""}" style="--tab-color:${t.color}" onclick="switchTab('${t.id}')">
       ${t.icon} ${t.label}${count?` <span class="tab-badge">${count}</span>`:""}
     </button>`;
@@ -428,19 +708,32 @@ function renderTabs(){
 }
 
 function renderTable(){
-  const t=tbl(activeTab);if(!t)return;
+  const t=tbl(activeTab);
+  if(!t) return;
+
   const hdr=`<div class="table-card-header" style="background:color-mix(in srgb,${t.color} 10%,transparent);border-bottom-color:color-mix(in srgb,${t.color} 25%,transparent)">
     <span style="font-size:19px">${t.icon}</span><span class="table-card-title" style="color:${t.color}">${t.label}</span></div>`;
+
   if(t.simple){
     document.getElementById("table-area").innerHTML=`<div class="table-card">${hdr}<div class="simple-section">
       <textarea id="simple-ta-${t.id}" placeholder="Voer hier klanten in…">${esc(simples[t.id]||"")}</textarea>
     </div></div>`;
+
     document.getElementById("simple-ta-"+t.id).addEventListener("input",e=>{
-      simples[t.id]=e.target.value;updateCount();
-      clearTimeout(window._st);window._st=setTimeout(()=>saveSimple(t.id,e.target.value),900);
+      simples[t.id]=e.target.value;
+      updateCount();
+      setSyncStatus("loading");
+
+      clearTimeout(simpleTimers[t.id]);
+      simpleTimers[t.id]=setTimeout(async ()=>{
+        try{
+          await saveSimple(t.id,e.target.value);
+        }catch(e){}
+      },900);
     });
     return;
   }
+
   const rl=[...(rows[t.id]||new Map()).values()];
   const ths=t.cols.map(c=>`<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("")+`<th style="width:36px"></th>`;
   const trs=rl.map(row=>{
@@ -450,102 +743,176 @@ function renderTable(){
     }).join("");
     return `<tr>${cells}<td style="text-align:center"><button class="del-btn" data-tid="${t.id}" data-lid="${row.localId}">×</button></td></tr>`;
   }).join("");
+
   document.getElementById("table-area").innerHTML=`<div class="table-card">${hdr}
     <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
     <button class="add-row-btn" id="add-row-btn">＋ Rij toevoegen</button></div>`;
+
   document.querySelectorAll("#table-area input[data-lid]").forEach(inp=>{
     inp.addEventListener("focus",onFocus);
     inp.addEventListener("input",onInput);
     inp.addEventListener("blur",onBlur);
   });
-  document.querySelectorAll("#table-area .del-btn[data-lid]").forEach(btn=>
-    btn.addEventListener("click",()=>deleteRow(btn.dataset.tid,btn.dataset.lid))
-  );
+
+  document.querySelectorAll("#table-area .del-btn[data-lid]").forEach(btn=>{
+    btn.addEventListener("click",()=>deleteRow(btn.dataset.tid,btn.dataset.lid));
+  });
+
   document.getElementById("add-row-btn").addEventListener("click",()=>addRow(t.id));
 }
 
 function updateCount(){
   const total=TABLES.reduce((s,t)=>{
-    if(t.simple)return s+(simples[t.id]?.trim()?1:0);
+    if(t.simple) return s+(simples[t.id]?.trim()?1:0);
     return s+[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).length;
   },0);
+
   document.getElementById("entry-count").textContent=total+" items";
-  document.getElementById("send-btn").disabled=total===0;
+  document.getElementById("send-btn").disabled=total===0 || isSending;
 }
 
 function onFocus(e){
-  const{tid,lid,col}=e.target.dataset;
-  if(col==="wie"&&!e.target.value&&yourName){
+  const {tid,lid,col}=e.target.dataset;
+  if(col==="wie" && !e.target.value && yourName){
     e.target.value=yourName;
     const row=rows[tid]?.get(lid);
-    if(row){row[col]=yourName;scheduleSave(tid,row);}
+    if(row){
+      row[col]=yourName;
+      row.dirty=true;
+      updateCount();
+      scheduleSave(tid,row);
+    }
   }
 }
+
 function onInput(e){
-  const{tid,lid,col}=e.target.dataset;
-  const row=rows[tid]?.get(lid);if(!row)return;
-  row[col]=e.target.value;row.dirty=true;updateCount();scheduleSave(tid,row);
-}
-function onBlur(e){
-  const{tid,lid,col}=e.target.dataset;
-  const row=rows[tid]?.get(lid);if(row)row[col]=e.target.value;
+  const {tid,lid,col}=e.target.dataset;
+  const row=rows[tid]?.get(lid);
+  if(!row) return;
+  row[col]=e.target.value;
+  row.dirty=true;
+  updateCount();
+  scheduleSave(tid,row);
 }
 
-function switchTab(id){activeTab=id;renderAll();}
+function onBlur(e){
+  const {tid,lid,col}=e.target.dataset;
+  const row=rows[tid]?.get(lid);
+  if(row) row[col]=e.target.value;
+}
+
+function switchTab(id){
+  activeTab=id;
+  renderAll();
+}
 
 function addRow(tid){
   const id=uid();
-  if(!rows[tid])rows[tid]=new Map();
+  if(!rows[tid]) rows[tid]=new Map();
   rows[tid].set(id,makeRow(tid,id));
+
   const t=tbl(tid);
   const tbody=document.querySelector("#table-area tbody");
-  if(!tbody){renderTable();return;}
+  if(!tbody){
+    renderTable();
+    return;
+  }
+
   const cells=t.cols.map(c=>{
     const ph=c.key==="wie"&&yourName?yourName:c.label+"…";
     return `<td><input type="text" value="" placeholder="${ph}" data-tid="${tid}" data-lid="${id}" data-col="${c.key}"/></td>`;
   }).join("");
+
   const tr=document.createElement("tr");
   tr.innerHTML=cells+`<td style="text-align:center"><button class="del-btn" data-tid="${tid}" data-lid="${id}">×</button></td>`;
   tbody.appendChild(tr);
+
   tr.querySelectorAll("input").forEach(inp=>{
     inp.addEventListener("focus",onFocus);
     inp.addEventListener("input",onInput);
     inp.addEventListener("blur",onBlur);
   });
+
   tr.querySelector(".del-btn").addEventListener("click",()=>deleteRow(tid,id));
   tr.querySelector("input")?.focus();
 }
 
 async function deleteRow(tid,lid){
   const row=rows[tid]?.get(lid);
-  if(row?.dbId)try{await sb.from("handover_entries").delete().eq("id",row.dbId);}catch(e){}
-  rows[tid]?.delete(lid);
-  const t=tbl(tid);
-  if(t&&!t.simple)while(rows[tid].size<3){const id=uid();rows[tid].set(id,makeRow(tid,id));}
-  renderAll();
+
+  try{
+    if(row?.dbId){
+      const { error } = await sb.from("handover_entries").delete().eq("id",row.dbId);
+      if(error) throw error;
+    }
+
+    rows[tid]?.delete(lid);
+
+    const t=tbl(tid);
+    if(t && !t.simple){
+      while(rows[tid].size<3){
+        const id=uid();
+        rows[tid].set(id,makeRow(tid,id));
+      }
+    }
+
+    renderAll();
+  }catch(e){
+    console.error(e);
+    toast("Rij verwijderen mislukt.","error");
+  }
 }
 
 async function clearAll(){
-  if(!confirm("Alle invoer wissen? Dit geldt voor iedereen."))return;
+  if(!confirm("Alle invoer wissen? Dit geldt voor iedereen.")) return;
+
   try{
-    await sb.from("handover_entries").delete().eq("entry_id",entryId);
-    await sb.from("handover_entries").insert({table_id:"_clear",row_data:{cleared:true},handover_date:entryDate,local_id:"_clear",entry_id:entryId});
-    setTimeout(async()=>{try{await sb.from("handover_entries").delete().eq("local_id","_clear").eq("entry_id",entryId);}catch(e){}},8000);
+    const delRes = await sb.from("handover_entries").delete().eq("entry_id",entryId);
+    if(delRes.error) throw delRes.error;
+
+    const insRes = await sb.from("handover_entries").insert({
+      table_id:"_clear",
+      row_data:{cleared:true},
+      handover_date:entryDate,
+      local_id:"_clear",
+      entry_id:entryId
+    });
+    if(insRes.error) throw insRes.error;
+
+    setTimeout(async ()=>{
+      try{
+        await sb.from("handover_entries").delete().eq("local_id","_clear").eq("entry_id",entryId);
+      }catch(e){}
+    },8000);
+
     window._clearedAlready=true;
-    initState();renderAll();toast("Alle invoer gewist.");
-  }catch(e){toast("Wissen mislukt.","error");}
+    initState();
+    renderAll();
+    toast("Alle invoer gewist.");
+  }catch(e){
+    console.error(e);
+    toast("Wissen mislukt.","error");
+  }
 }
 
 function readMeta(){
   return ["datum","naam","tijd","emails","wstr","wsoph","wscc"].reduce((m,k)=>{
-    m[k]=document.getElementById("meta-"+k).value;return m;
+    m[k]=document.getElementById("meta-"+k).value;
+    return m;
   },{});
 }
+
 function bindMeta(date){
   document.getElementById("meta-datum").value=dateToNL(date);
   ["datum","naam","tijd","emails","wstr","wsoph","wscc"].forEach(k=>{
     document.getElementById("meta-"+k).oninput=()=>{
-      clearTimeout(metaTimer);metaTimer=setTimeout(()=>saveMeta(readMeta()),1000);
+      setSyncStatus("loading");
+      clearTimeout(metaTimer);
+      metaTimer=setTimeout(async ()=>{
+        try{
+          await saveMeta(readMeta());
+        }catch(e){}
+      },1000);
     };
   });
 }
@@ -555,17 +922,22 @@ function openNameModal(){
   openModal("name-modal");
   setTimeout(()=>document.getElementById("name-input").focus(),100);
 }
+
 function saveName(){
   yourName=document.getElementById("name-input").value.trim();
   localStorage.setItem("handover-name",yourName);
   document.getElementById("name-badge").textContent=yourName?`👤 ${yourName}`:"👤 Naam instellen";
   closeModal("name-modal");
 }
-document.getElementById("name-input").addEventListener("keydown",e=>{if(e.key==="Enter")saveName();});
+
+document.getElementById("name-input").addEventListener("keydown",e=>{
+  if(e.key==="Enter") saveName();
+});
 
 function generatePDF(){
-  const{jsPDF}=window.jspdf;
+  const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4",compress:false,putOnlyUsedFonts:true,floatPrecision:2});
+
   doc.setProperties({
     title:"Orderinvoer Dagrapport",
     subject:"Dagrapport",
@@ -574,37 +946,84 @@ function generatePDF(){
     creator:"jsPDF",
     pdfVersion:"1.4"
   });
+
   const W=doc.internal.pageSize.getWidth();
   const m=readMeta();
-  const tClr={bijzonderheden:[79,142,247],speciaal:[245,166,35],invoeren:[155,109,255],levertijden:[45,212,191],ophalen:[244,114,182],geannuleerd:[239,83,83],onder150:[52,211,153],na0000:[107,114,153],onboarding:[79,142,247]};
-  doc.setFillColor(13,15,24);doc.rect(0,0,W,44,"F");
-  doc.setTextColor(255,255,255);doc.setFontSize(17);doc.setFont("helvetica","bold");
+  const tClr={
+    bijzonderheden:[79,142,247],
+    speciaal:[245,166,35],
+    invoeren:[155,109,255],
+    levertijden:[45,212,191],
+    ophalen:[244,114,182],
+    geannuleerd:[239,83,83],
+    onder150:[52,211,153],
+    na0000:[107,114,153],
+    onboarding:[79,142,247]
+  };
+
+  doc.setFillColor(13,15,24);
+  doc.rect(0,0,W,44,"F");
+
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(17);
+  doc.setFont("helvetica","bold");
   doc.text("Orderinvoer Dagrapport",14,13);
-  doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(220,225,245);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica","normal");
+  doc.setTextColor(220,225,245);
   doc.text(`Datum: ${m.datum||todayNL()}     Naam: ${m.naam||"–"}     Aanvangstijd: ${m.tijd||"–"}     E-mails/InOne: ${m.emails||"–"}`,14,25);
+
   doc.setTextColor(180,190,230);
   doc.text(`Webshop TR: ${m.wstr||"–"}     Webshop ophalen: ${m.wsoph||"–"}     Webshop CC: ${m.wscc||"–"}`,14,36);
+
   let y=50;
+
   TABLES.forEach(t=>{
     if(t.simple){
-      const val=(simples[t.id]||"").trim();if(!val)return;
-      if(y>260){doc.addPage();y=16;}
-      const[r,g,b]=tClr[t.id]||[120,120,200];
-      doc.setFillColor(r,g,b);doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
-      doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont("helvetica","bold");
-      doc.text(t.label,18,y+5);y+=9;
-      doc.setFontSize(9);doc.setFont("helvetica","normal");doc.setTextColor(50,55,80);
+      const val=(simples[t.id]||"").trim();
+      if(!val) return;
+
+      if(y>260){
+        doc.addPage();
+        y=16;
+      }
+
+      const [r,g,b]=tClr[t.id]||[120,120,200];
+      doc.setFillColor(r,g,b);
+      doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(9);
+      doc.setFont("helvetica","bold");
+      doc.text(t.label,18,y+5);
+      y+=9;
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica","normal");
+      doc.setTextColor(50,55,80);
       const lines=doc.splitTextToSize(val,W-28);
-      doc.text(lines,14,y+4);y+=lines.length*5+8;
+      doc.text(lines,14,y+4);
+      y+=lines.length*5+8;
       return;
     }
+
     const rl=[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r));
-    if(!rl.length)return;
-    if(y>255){doc.addPage();y=16;}
-    const[r,g,b]=tClr[t.id]||[120,120,200];
-    doc.setFillColor(r,g,b);doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
-    doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont("helvetica","bold");
-    doc.text(t.label,18,y+5);y+=9;
+    if(!rl.length) return;
+
+    if(y>255){
+      doc.addPage();
+      y=16;
+    }
+
+    const [r,g,b]=tClr[t.id]||[120,120,200];
+    doc.setFillColor(r,g,b);
+    doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9);
+    doc.setFont("helvetica","bold");
+    doc.text(t.label,18,y+5);
+    y+=9;
+
     doc.autoTable({
       startY:y,
       head:[t.cols.map(c=>c.label)],
@@ -617,102 +1036,208 @@ function generatePDF(){
       tableWidth:"auto",
       margin:{left:10,right:10},
     });
+
     y=doc.lastAutoTable.finalY+7;
   });
-  doc.setFontSize(7.5);doc.setTextColor(160,165,200);
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(160,165,200);
   doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`,14,doc.internal.pageSize.getHeight()-7);
+
   return doc;
 }
 
-// ── Generate Excel from SQL data using SheetJS ────────────────
 function generateExcelBase64(sqlData){
-  // Clean up date fields
-  const cleaned = sqlData.map(row => {
-    const r = {...row};
-    Object.keys(r).forEach(k => {
-      if (typeof r[k] === 'string' && /^\d{4}-\d{2}-\d{2}T00:00:00/.test(r[k])) {
-        r[k] = r[k].slice(0, 10);
+  if(!Array.isArray(sqlData) || !sqlData.length) return null;
+
+  const cleaned=sqlData.map(row=>{
+    const r={...row};
+    Object.keys(r).forEach(k=>{
+      if(typeof r[k]==='string' && /^\d{4}-\d{2}-\d{2}T00:00:00/.test(r[k])){
+        r[k]=r[k].slice(0,10);
       }
     });
     return r;
   });
 
-  const cols = Object.keys(cleaned[0]||{});
+  const cols=Object.keys(cleaned[0]||{});
+  const wsData=[cols,...cleaned.map(row=>cols.map(k=>row[k]??''))];
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
 
-  // Use aoa_to_sheet for clean output
-  const wsData = [cols, ...cleaned.map(row => cols.map(k => row[k]??''))];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // Column widths
-  ws["!cols"] = cols.map(key=>({
-    wch: Math.max(key.length, ...cleaned.slice(0,50).map(r=>String(r[key]||"").length))
+  ws["!cols"]=cols.map(key=>({
+    wch:Math.max(key.length,...cleaned.slice(0,50).map(r=>String(r[key]||"").length))
   }));
 
-  // Freeze header row
-  ws["!freeze"] = {xSplit:0, ySplit:1};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Productie");
+  return XLSX.write(wb,{bookType:"xlsx",type:"base64"});
+}
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Productie");
-  return XLSX.write(wb, {bookType:"xlsx", type:"base64"});
+async function flushPendingSaves(){
+  const tasks=[];
+
+  TABLES.forEach(t=>{
+    if(t.simple){
+      clearTimeout(simpleTimers[t.id]);
+      tasks.push(saveSimple(t.id,simples[t.id]||""));
+      return;
+    }
+
+    for(const row of (rows[t.id]||new Map()).values()){
+      clearTimeout(saveTimers[row.localId]);
+      if(row.dirty || row.dbId){
+        tasks.push(saveRow(t.id,row));
+      }
+    }
+  });
+
+  tasks.push(saveMeta(readMeta()));
+  await Promise.all(tasks);
 }
 
 async function handleSend(){
-  const btn=document.getElementById("send-btn"),lbl=document.getElementById("send-label");
-  btn.disabled=true;lbl.innerHTML='<span class="spin"></span> Versturen…';
+  if(isSending) return;
+  if(!entryId) return;
+
+  isSending=true;
+
+  const btn=document.getElementById("send-btn");
+  const lbl=document.getElementById("send-label");
+
+  btn.disabled=true;
+  btn.style.background="";
+  lbl.innerHTML='<span class="spin"></span> Versturen…';
+
   try{
+    await flushPendingSaves();
+
     const doc=generatePDF();
     const m=readMeta();
-    const fname=`Dagrapport_${(m.datum||todayNL()).replace(/\//g,"-")}.pdf`;
+
+    const displayDate=m.datum||dateToNL(entryDate);
+    const fileDate=displayDate.replace(/\//g,"-");
+
+    const fname=`Dagrapport_${fileDate}.pdf`;
     const pdfB64=doc.output("datauristring").split(",")[1];
+
     const summary={};
     TABLES.forEach(t=>{
-      if(t.simple){summary[t.label]=simples[t.id]||"";return;}
-      summary[t.label]=[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).map(r=>{const o={};t.cols.forEach(c=>o[c.label]=r[c.key]||"");return o;});
+      if(t.simple){
+        summary[t.label]=simples[t.id]||"";
+        return;
+      }
+
+      summary[t.label]=[...(rows[t.id]||new Map()).values()]
+        .filter(r=>hasData(t.id,r))
+        .map(r=>{
+          const o={};
+          t.cols.forEach(c=>o[c.label]=r[c.key]||"");
+          return o;
+        });
     });
 
-    // Step 1: get SQL data from Power Automate (requestExcel=true → True branch → Response)
-    let excelB64 = null;
-    let excelFname = `Productie_${(m.datum||todayNL()).replace(/\//g,"-")}.xlsx`;
-    try {
-      const res1 = await fetch(PA_TRIGGER_URL,{
+    let excelB64=null;
+    const excelFname=`Productie_${fileDate}.xlsx`;
+
+    try{
+      const res1=await fetch(PA_TRIGGER_URL,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,requestExcel:true})
+        body:JSON.stringify({
+          datum:entryDate,
+          datumDisplay:displayDate,
+          filename:fname,
+          pdfBase64:pdfB64,
+          meta:m,
+          summary,
+          requestExcel:true
+        })
       });
-      if(res1.ok){
-        const resData = await res1.json();
-        const sqlData = Array.isArray(resData) ? resData : resData?.sqlData;
-        if(sqlData && sqlData.length) excelB64 = generateExcelBase64(sqlData);
-      }
-    } catch(e){ console.warn("Excel ophalen mislukt:",e); }
 
-    // Step 2: send email (sendEmail=true → True branch → sends email)
-    const res2 = await fetch(PA_TRIGGER_URL,{
+      const raw1=await res1.text();
+      let payload1=null;
+
+      try{
+        payload1=raw1?JSON.parse(raw1):null;
+      }catch{
+        payload1=raw1;
+      }
+
+      if(!res1.ok){
+        throw new Error(typeof payload1==="object" ? (payload1?.message || `PA ${res1.status}`) : `PA ${res1.status}`);
+      }
+
+      const sqlData=Array.isArray(payload1) ? payload1 : payload1?.sqlData;
+      if(sqlData && sqlData.length){
+        excelB64=generateExcelBase64(sqlData);
+      }
+    }catch(e){
+      console.warn("Excel ophalen mislukt:",e);
+    }
+
+    const res2=await fetch(PA_TRIGGER_URL,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({datum:m.datum||todayNL(),filename:fname,pdfBase64:pdfB64,meta:m,summary,sendEmail:true,excelBase64:excelB64,excelFilename:excelFname})
+      body:JSON.stringify({
+        datum:entryDate,
+        datumDisplay:displayDate,
+        filename:fname,
+        pdfBase64:pdfB64,
+        meta:m,
+        summary,
+        sendEmail:true,
+        excelBase64:excelB64,
+        excelFilename:excelFname
+      })
     });
-    if(!res2.ok) throw new Error("PA "+res2.status);
 
-    lbl.textContent="✓ Verstuurd!";btn.style.background="linear-gradient(135deg,#34D399,#059669)";
+    const raw2=await res2.text();
+    let payload2=null;
+
+    try{
+      payload2=raw2?JSON.parse(raw2):null;
+    }catch{
+      payload2=raw2;
+    }
+
+    if(!res2.ok){
+      throw new Error(typeof payload2==="object" ? (payload2?.message || `PA ${res2.status}`) : `PA ${res2.status}`);
+    }
+
+    if(payload2 && typeof payload2==="object" && payload2.success===false){
+      throw new Error(payload2.message || "Flow returned failure");
+    }
+
+    lbl.textContent="✓ Verstuurd!";
+    btn.style.background="linear-gradient(135deg,#34D399,#059669)";
     toast("✅ Dagrapport verstuurd!","success");
-    doc.save(fname);
 
-    await sb.from("handover_entries").delete().eq("entry_id",entryId);
+    const delRes=await sb.from("handover_entries").delete().eq("entry_id",entryId);
+    if(delRes.error) throw delRes.error;
+
     setTimeout(()=>{
       lbl.textContent="📩 Dagrapport versturen";
-      btn.style.background="";btn.disabled=false;
+      btn.style.background="";
+      btn.disabled=false;
       goHome();
     },2000);
 
   }catch(e){
     console.error(e);
-    lbl.textContent="📩 Dagrapport versturen";btn.disabled=false;
+    lbl.textContent="📩 Dagrapport versturen";
+    btn.style.background="";
+    btn.disabled=false;
     toast("❌ Versturen mislukt.","error");
+  }finally{
+    isSending=false;
+    updateCount();
   }
 }
 
-if(yourName)document.getElementById("name-badge").textContent=`👤 ${yourName}`;
+if(yourName){
+  document.getElementById("name-badge").textContent=`👤 ${yourName}`;
+}
+
 setSyncStatus("ok");
 loadDashboard();
 </script>
