@@ -78,21 +78,37 @@ td input::placeholder{color:var(--muted)}
 .add-row-btn{width:100%;background:none;border:none;padding:10px 18px;text-align:left;color:var(--muted);font-size:12.5px;transition:all .18s;display:flex;align-items:center;gap:6px;border-top:1px solid var(--border)}
 .add-row-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
 .footer-hint{text-align:center;font-size:11.5px;color:var(--muted);padding:8px 24px 24px}
+
+/* ── MODALS ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-overlay.open{opacity:1;pointer-events:all}
 .modal{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:26px;width:340px}
 .modal h3{font-size:16px;font-weight:700;margin-bottom:5px}
 .modal p{font-size:12.5px;color:var(--sub);margin-bottom:16px;line-height:1.5}
-.modal input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13.5px;color:var(--text);margin-bottom:12px;outline:none;cursor:text}
-.modal input:focus{border-color:var(--blue)}
-.modal-save{width:100%;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:9px;font-size:13.5px;font-weight:600}
-#toast{position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 18px;font-size:12.5px;color:var(--text);box-shadow:0 8px 28px rgba(0,0,0,.4);opacity:0;transition:all .28s;pointer-events:none;z-index:300;max-width:360px;text-align:center;white-space:nowrap}
+.modal input[type="text"],.modal input[type="date"]{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13.5px;color:var(--text);margin-bottom:12px;outline:none;cursor:text}
+.modal input[type="text"]:focus,.modal input[type="date"]:focus{border-color:var(--blue)}
+.modal-save{width:100%;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:9px;font-size:13.5px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.modal-save:hover{opacity:.88}
+
+/* ── CONFIRM MODAL ── */
+.confirm-modal{width:360px}
+.confirm-modal h3{margin-bottom:8px}
+.confirm-modal p{margin-bottom:20px}
+.confirm-actions{display:flex;gap:8px}
+.confirm-actions .btn{flex:1;justify-content:center;padding:9px 0;font-size:13px}
+.confirm-actions .btn-primary{background:var(--red);box-shadow:none}
+
+/* ── TOAST ── */
+#toast{position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 18px;font-size:12.5px;color:var(--text);box-shadow:0 8px 28px rgba(0,0,0,.4);opacity:0;transition:all .28s;pointer-events:none;z-index:300;max-width:420px;text-align:center;white-space:nowrap}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 #toast.success{border-color:rgba(52,211,153,.4)}
 #toast.error{border-color:rgba(239,83,83,.4)}
 #toast.warn{border-color:rgba(245,166,35,.4)}
+
+/* ── SPINNER ── */
 .spin{display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
+
 #name-badge{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12.5px;color:var(--sub)}
 #name-badge:hover{color:var(--text);border-color:var(--muted)}
 </style>
@@ -135,34 +151,37 @@ const TABLES = [
     <span id="entry-count" style="display:none;font-size:12.5px;color:var(--sub);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px">0 items</span>
     <button id="back-btn"  class="btn btn-ghost"   style="display:none" onclick="goHome()">← Terug</button>
     <button id="name-badge" onclick="openNameModal()">👤 Naam instellen</button>
-    <button id="clear-btn" class="btn btn-danger"  style="display:none" onclick="clearAll()">🗑 Alles wissen</button>
+    <button id="clear-btn" class="btn btn-danger"  style="display:none" onclick="confirmClearAll()">🗑 Alles wissen</button>
     <button id="send-btn"  class="btn btn-primary" style="display:none" onclick="handleSend()" disabled>
       <span id="send-label">📩 Dagrapport versturen</span>
     </button>
   </div>
 </header>
 
+<!-- DASHBOARD -->
 <div id="dashboard">
   <div class="dashboard-title">Dagrapport overzicht</div>
   <div class="dashboard-sub">Selecteer een rapport of maak een nieuw aan.</div>
   <div class="entries-grid" id="entries-grid"><div style="color:var(--sub);font-size:13px">Laden…</div></div>
 </div>
 
+<!-- ENTRY VIEW -->
 <div id="entry-view">
   <div class="meta-bar">
-    <div class="meta-field"><span class="meta-label">Datum:</span><input class="meta-input" id="meta-datum" style="width:110px"/></div>
+    <div class="meta-field"><span class="meta-label">Datum:</span><input class="meta-input" id="meta-datum" readonly style="width:110px;cursor:default"/></div>
     <div class="meta-field"><span class="meta-label">Naam avond:</span><input class="meta-input" id="meta-naam" style="width:120px"/></div>
     <div class="meta-field"><span class="meta-label">Aanvangstijd:</span><input class="meta-input" id="meta-tijd" placeholder="00:00" style="width:70px"/></div>
-    <div class="meta-field"><span class="meta-label">E-mails/InOne:</span><input class="meta-input" id="meta-emails" placeholder="0" style="width:60px"/></div>
-    <div class="meta-field"><span class="meta-label">Webshop TR:</span><input class="meta-input" id="meta-wstr" placeholder="0" style="width:60px"/></div>
-    <div class="meta-field"><span class="meta-label">Webshop ophalen:</span><input class="meta-input" id="meta-wsoph" placeholder="0" style="width:60px"/></div>
-    <div class="meta-field"><span class="meta-label">Webshop CC:</span><input class="meta-input" id="meta-wscc" placeholder="0" style="width:60px"/></div>
+    <div class="meta-field"><span class="meta-label">E-mails/InOne:</span><input class="meta-input" id="meta-emails" placeholder="0" inputmode="numeric" style="width:60px"/></div>
+    <div class="meta-field"><span class="meta-label">Webshop TR:</span><input class="meta-input" id="meta-wstr" placeholder="0" inputmode="numeric" style="width:60px"/></div>
+    <div class="meta-field"><span class="meta-label">Webshop ophalen:</span><input class="meta-input" id="meta-wsoph" placeholder="0" inputmode="numeric" style="width:60px"/></div>
+    <div class="meta-field"><span class="meta-label">Webshop CC:</span><input class="meta-input" id="meta-wscc" placeholder="0" inputmode="numeric" style="width:60px"/></div>
   </div>
   <div class="tabs" id="tab-bar"></div>
   <div class="table-wrap" id="table-area"></div>
   <div class="footer-hint">Live synchronisatie · Klik op het logo om terug te gaan</div>
 </div>
 
+<!-- NAME MODAL -->
 <div class="modal-overlay" id="name-modal">
   <div class="modal">
     <h3>Jouw naam</h3>
@@ -172,12 +191,25 @@ const TABLES = [
   </div>
 </div>
 
+<!-- DATE MODAL -->
 <div class="modal-overlay" id="date-modal">
   <div class="modal">
     <h3>Nieuw dagrapport</h3>
     <p>Kies de datum. Standaard is morgen geselecteerd.</p>
-    <input type="date" id="date-picker" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:13.5px;color:var(--text);margin-bottom:12px;outline:none;cursor:pointer"/>
+    <input type="date" id="date-picker" onkeydown="if(event.key==='Enter')confirmNewEntry()"/>
     <button class="modal-save" onclick="confirmNewEntry()">Aanmaken</button>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL (replaces native confirm()) -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal confirm-modal">
+    <h3 id="confirm-title">Bevestigen</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="resolveConfirm(false)">Annuleren</button>
+      <button class="btn btn-primary" id="confirm-ok-btn" onclick="resolveConfirm(true)">Bevestigen</button>
+    </div>
   </div>
 </div>
 
@@ -191,23 +223,29 @@ const TABLES = [
 <script>
 'use strict';
 
+/* ── SUPABASE ── */
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let yourName        = localStorage.getItem("handover-name") || "";
-let entryDate       = null;
-let entryId         = null;
-let activeTab       = TABLES[0].id;
-let firstSync       = true;
-let syncTimer       = null;
-let metaTimer       = null;
-const saveTimers    = {};
-const simpleTimers  = {};
-let rows            = {};
-let simples         = {};
-let isSending       = false;
+/* ── STATE ── */
+let yourName       = localStorage.getItem("handover-name") || "";
+let entryDate      = null;
+let entryId        = null;
+let activeTab      = TABLES[0].id;
+let firstSync      = true;
+let syncTimer      = null;
+let metaTimer      = null;
+let syncFailCount  = 0;       // FIX #4: backoff counter
+const SYNC_BASE_MS = 7000;
+const SYNC_MAX_MS  = 60000;
+const saveTimers   = {};
+const simpleTimers = {};
+let rows           = {};
+let simples        = {};
+let isSending      = false;
+let _clearVersion  = 0;       // FIX #13: versioned clear guard
 
+/* ── HELPERS ── */
 const uid      = () => crypto.randomUUID();
-const todayStr = () => new Date().toISOString().slice(0,10);
 const todayNL  = () => new Date().toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"});
 const dateToNL = iso => new Date(iso+"T12:00:00").toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"});
 const tbl      = id => TABLES.find(t=>t.id===id);
@@ -215,22 +253,37 @@ const esc      = s  => String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;"
 const hasData  = (tid,row) => { const t=tbl(tid); return t&&t.cols.some(c=>(row[c.key]||"").trim()); };
 const makeRow  = (tid,lid) => { const r={localId:lid,dbId:null,dirty:false}; tbl(tid).cols.forEach(c=>r[c.key]=""); return r; };
 
-function initState() {
-  rows = {};
+function initState(){
+  rows    = {};
   simples = {};
   TABLES.forEach(t=>{
-    if(t.simple){
-      simples[t.id] = "";
-      return;
-    }
-    rows[t.id] = new Map();
-    for(let i=0;i<3;i++){
-      const id = uid();
-      rows[t.id].set(id, makeRow(t.id,id));
-    }
+    if(t.simple){ simples[t.id]=""; return; }
+    rows[t.id]=new Map();
+    for(let i=0;i<3;i++){ const id=uid(); rows[t.id].set(id,makeRow(t.id,id)); }
   });
 }
 
+/* ── CONFIRM MODAL (replaces native confirm) ── FIX #11 ── */
+let _confirmResolve = null;
+function showConfirm(title, msg, okLabel="Bevestigen", danger=true){
+  return new Promise(resolve=>{
+    _confirmResolve = resolve;
+    document.getElementById("confirm-title").textContent = title;
+    document.getElementById("confirm-msg").textContent   = msg;
+    const okBtn = document.getElementById("confirm-ok-btn");
+    okBtn.textContent = okLabel;
+    okBtn.className   = "btn " + (danger ? "btn-primary" : "btn-ghost");
+    if(danger) okBtn.style.background = "var(--red)";
+    else       okBtn.style.background = "";
+    openModal("confirm-modal");
+  });
+}
+function resolveConfirm(val){
+  closeModal("confirm-modal");
+  if(_confirmResolve){ _confirmResolve(val); _confirmResolve=null; }
+}
+
+/* ── MODALS ── */
 const openModal  = id => document.getElementById(id).classList.add("open");
 const closeModal = id => document.getElementById(id).classList.remove("open");
 
@@ -240,45 +293,51 @@ document.querySelectorAll(".modal-overlay").forEach(el=>{
   });
 });
 
+/* ── SYNC STATUS ── */
 function setSyncStatus(s){
   const dot=document.getElementById("sync-dot"),lbl=document.getElementById("sync-label");
   const map={
-    ok:["sync-dot","Live gesynchroniseerd"],
-    error:["sync-dot red","Synchronisatiefout"],
+    ok:   ["sync-dot",        "Live gesynchroniseerd"],
+    error:["sync-dot red",    "Synchronisatiefout"],
     loading:["sync-dot amber","Synchroniseren…"]
   };
   [dot.className,lbl.textContent]=map[s]||map.ok;
 }
 
+/* ── TOAST ── */
 let toastTimer;
-function toast(msg,type=""){
+function toast(msg,type="",duration=6000){           // FIX #19: longer default, errors get 8s
   const el=document.getElementById("toast");
   el.textContent=msg;
-  el.className="show "+type;
+  el.className="show "+(type||"");
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.className="",5000);
+  const d = type==="error" ? 8000 : duration;
+  toastTimer=setTimeout(()=>el.className="",d);
 }
 
+/* ──────────────────────────────────────────
+   DASHBOARD
+────────────────────────────────────────── */
 async function loadDashboard(){
   setSyncStatus("loading");
   try{
+    // FIX #14: only fetch the 60 most recent entries to prevent O(n) growth
     const { data, error } = await sb
       .from("handover_entries")
       .select("handover_date,table_id,row_data,entry_id")
       .not("table_id","in","(_clear,_meta)")
-      .not("entry_id","is",null);
+      .not("entry_id","is",null)
+      .order("handover_date",{ascending:false})
+      .limit(600);   // 60 entries × ~10 tables max
 
     if(error) throw error;
 
     const byEntry={};
-
     data.forEach(item=>{
       const eid=item.entry_id;
       if(!byEntry[eid]) byEntry[eid]={date:item.handover_date,counts:{},total:0};
-
       const t=tbl(item.table_id);
       if(!t) return;
-
       if(t.simple){
         if((item.row_data?.text||"").trim()){
           byEntry[eid].counts[t.id]=(byEntry[eid].counts[t.id]||0)+1;
@@ -291,21 +350,18 @@ async function loadDashboard(){
     });
 
     const sorted=Object.entries(byEntry).sort((a,b)=>b[1].date.localeCompare(a[1].date));
-    const tomorrow=new Date();
-    tomorrow.setDate(tomorrow.getDate()+1);
+    const tomorrow=new Date(); tomorrow.setDate(tomorrow.getDate()+1);
     const tomorrowIso=tomorrow.toISOString().slice(0,10);
 
     let html=`<div class="entry-card entry-card-new" onclick="startNewEntry()"><div class="plus">＋</div><div>Nieuw dagrapport</div></div>`;
-
     sorted.forEach(([eid,info])=>{
       const isTomorrow=info.date===tomorrowIso;
       const chips=Object.entries(info.counts).slice(0,3).map(([tid,cnt])=>{
         const t=tbl(tid);
         return t?`<span class="entry-chip">${t.icon} ${cnt}</span>`:"";
       }).join("");
-
-      html += `<div class="entry-card" onclick="openEntry('${info.date}','${eid}')">
-        <button class="entry-card-del" onclick="event.stopPropagation();deleteEntry('${eid}')">🗑</button>
+      html+=`<div class="entry-card" onclick="openEntry('${info.date}','${eid}')">
+        <button class="entry-card-del" onclick="event.stopPropagation();confirmDeleteEntry('${eid}')">🗑</button>
         <div class="entry-card-date">${dateToNL(info.date)} ${isTomorrow?'<span class="active-badge">Morgen</span>':''}</div>
         <div class="entry-card-meta">${info.total} item${info.total!==1?"s":""}</div>
         <div class="entry-card-counts">${chips}</div>
@@ -317,17 +373,17 @@ async function loadDashboard(){
   }catch(e){
     console.error(e);
     setSyncStatus("error");
-    document.getElementById("entries-grid").innerHTML=`<div style="color:var(--red)">Laden mislukt.</div>`;
+    document.getElementById("entries-grid").innerHTML=`<div style="color:var(--red)">Laden mislukt. Vernieuw de pagina.</div>`;
   }
 }
 
-async function deleteEntry(eid){
-  if(!confirm("Dit rapport verwijderen?")) return;
-
+/* FIX #11: replace native confirm in delete */
+async function confirmDeleteEntry(eid){
+  const ok = await showConfirm("Rapport verwijderen","Dit dagrapport en alle bijbehorende gegevens worden permanent verwijderd.","Verwijderen",true);
+  if(!ok) return;
   try{
-    const { error } = await sb.from("handover_entries").delete().eq("entry_id", eid);
+    const { error } = await sb.from("handover_entries").delete().eq("entry_id",eid);
     if(error) throw error;
-
     await loadDashboard();
     toast("Rapport verwijderd.");
   }catch(e){
@@ -336,39 +392,35 @@ async function deleteEntry(eid){
   }
 }
 
+/* ──────────────────────────────────────────
+   NAVIGATION
+────────────────────────────────────────── */
 function goHome(){
-  entryDate = null;
-  entryId = null;
-  activeTab = TABLES[0].id;
-  firstSync = true;
-  isSending = false;
-
-  clearInterval(syncTimer);
-  syncTimer = null;
-
+  clearInterval(syncTimer); syncTimer=null;
   clearTimeout(metaTimer);
-  Object.keys(saveTimers).forEach(k=>clearTimeout(saveTimers[k]));
-  Object.keys(simpleTimers).forEach(k=>clearTimeout(simpleTimers[k]));
+  Object.values(saveTimers).forEach(clearTimeout);
+  Object.values(simpleTimers).forEach(clearTimeout);
 
-  window._clearedAlready = false;
+  entryDate=null; entryId=null;
+  activeTab=TABLES[0].id;
+  firstSync=true; isSending=false;
+  syncFailCount=0;
+  _clearVersion++;         // FIX #13: bump version so stale bgSync won't trigger clear
 
   ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>{
     document.getElementById(id).style.display="none";
   });
-
   document.getElementById("dashboard").style.display="block";
   document.getElementById("entry-view").style.display="none";
-
   ["meta-datum","meta-naam","meta-tijd","meta-emails","meta-wstr","meta-wsoph","meta-wscc"].forEach(id=>{
     document.getElementById(id).value="";
   });
-
   loadDashboard();
 }
 
-function startNewEntry(){
-  const tomorrow=new Date();
-  tomorrow.setDate(tomorrow.getDate()+1);
+/* FIX #1: check for duplicate date before creating */
+async function startNewEntry(){
+  const tomorrow=new Date(); tomorrow.setDate(tomorrow.getDate()+1);
   const ts=tomorrow.toISOString().slice(0,10);
   const dp=document.getElementById("date-picker");
   dp.value=ts;
@@ -376,80 +428,88 @@ function startNewEntry(){
   openModal("date-modal");
 }
 
-function confirmNewEntry(){
+async function confirmNewEntry(){
   const val=document.getElementById("date-picker").value;
-  if(!val){
-    toast("Kies een datum.","warn");
-    return;
+  if(!val){ toast("Kies een datum.","warn"); return; }
+
+  // FIX #1: check if a report for this date already exists
+  try{
+    const { data, error } = await sb
+      .from("handover_entries")
+      .select("entry_id")
+      .eq("handover_date",val)
+      .not("entry_id","is",null)
+      .limit(1);
+
+    if(error) throw error;
+
+    if(data && data.length>0){
+      closeModal("date-modal");
+      // Open the existing entry instead of creating duplicate
+      toast(`Er bestaat al een rapport voor ${dateToNL(val)}. Dat rapport wordt geopend.`,"warn");
+      openEntry(val, data[0].entry_id);
+      return;
+    }
+  }catch(e){
+    console.error("Datum-check mislukt:",e);
+    // Non-fatal: continue with creation
   }
+
   closeModal("date-modal");
-  openEntry(val,uid());
+  openEntry(val, uid());
 }
 
-function openEntry(date,eid){
-  entryDate = date;
-  entryId = eid;
-  activeTab = TABLES[0].id;
-  firstSync = true;
-  isSending = false;
-  window._clearedAlready = false;
+function openEntry(date, eid){
+  entryDate=date; entryId=eid;
+  activeTab=TABLES[0].id;
+  firstSync=true; isSending=false;
+  syncFailCount=0;
+  _clearVersion++;       // fresh clear-guard for this session
 
-  rows = {};
-  simples = {};
-
+  rows={}; simples={};
   document.getElementById("dashboard").style.display="none";
   document.getElementById("entry-view").style.display="block";
   ["entry-count","back-btn","clear-btn","send-btn"].forEach(id=>{
-    document.getElementById(id).style.display="inline-flex";
+    const el=document.getElementById(id);
+    el.style.display=(id==="send-btn"||id==="clear-btn")?"inline-flex":"inline-flex";
   });
 
   initState();
   bindMeta(date);
   renderAll();
   bgSync();
-
   clearInterval(syncTimer);
-  syncTimer = setInterval(bgSync,7000);
-  setTimeout(bgSync,1000);
+  syncTimer=setInterval(bgSync, SYNC_BASE_MS);
 }
 
+/* ──────────────────────────────────────────
+   ROW PERSISTENCE
+────────────────────────────────────────── */
 async function saveRow(tid,row){
   if(!entryId) return;
-
   try{
-    const rowHasData = hasData(tid,row);
-
+    const rowHasData=hasData(tid,row);
     if(!rowHasData){
       if(row.dbId){
-        const { error } = await sb.from("handover_entries").delete().eq("id", row.dbId);
+        const { error }=await sb.from("handover_entries").delete().eq("id",row.dbId);
         if(error) throw error;
-        row.dbId = null;
+        row.dbId=null;
       }
-      row.dirty = false;
+      row.dirty=false;
       setSyncStatus("ok");
       return;
     }
-
     const t=tbl(tid), rd={};
     t.cols.forEach(c=>rd[c.key]=row[c.key]||"");
-
-    const payload={
-      table_id:tid,
-      row_data:rd,
-      handover_date:entryDate,
-      local_id:row.localId,
-      entry_id:entryId
-    };
-
+    const payload={table_id:tid,row_data:rd,handover_date:entryDate,local_id:row.localId,entry_id:entryId};
     if(row.dbId){
-      const { error } = await sb.from("handover_entries").update(payload).eq("id", row.dbId);
+      const { error }=await sb.from("handover_entries").update(payload).eq("id",row.dbId);
       if(error) throw error;
     }else{
-      const { data, error } = await sb.from("handover_entries").insert(payload).select("id").single();
+      const { data, error }=await sb.from("handover_entries").insert(payload).select("id").single();
       if(error) throw error;
       if(data) row.dbId=data.id;
     }
-
     row.dirty=false;
     setSyncStatus("ok");
   }catch(e){
@@ -461,36 +521,19 @@ async function saveRow(tid,row){
 
 async function saveSimple(tid,val){
   if(!entryId) return;
-
   try{
-    const { data: ex, error: selErr } = await sb
-      .from("handover_entries")
-      .select("id")
-      .eq("entry_id", entryId)
-      .eq("table_id", tid)
-      .limit(1);
-
+    const { data:ex, error:selErr }=await sb
+      .from("handover_entries").select("id").eq("entry_id",entryId).eq("table_id",tid).limit(1);
     if(selErr) throw selErr;
-
     if(ex?.length){
-      const { error } = await sb
-        .from("handover_entries")
-        .update({ row_data:{ text:val } })
-        .eq("id", ex[0].id);
-
+      const { error }=await sb.from("handover_entries").update({row_data:{text:val}}).eq("id",ex[0].id);
       if(error) throw error;
     }else{
-      const { error } = await sb.from("handover_entries").insert({
-        table_id:tid,
-        row_data:{ text:val },
-        handover_date:entryDate,
-        local_id:tid,
-        entry_id:entryId
+      const { error }=await sb.from("handover_entries").insert({
+        table_id:tid,row_data:{text:val},handover_date:entryDate,local_id:tid,entry_id:entryId
       });
-
       if(error) throw error;
     }
-
     setSyncStatus("ok");
   }catch(e){
     console.error(e);
@@ -501,36 +544,19 @@ async function saveSimple(tid,val){
 
 async function saveMeta(m){
   if(!entryId) return;
-
   try{
-    const { data: ex, error: selErr } = await sb
-      .from("handover_entries")
-      .select("id")
-      .eq("entry_id", entryId)
-      .eq("table_id", "_meta")
-      .limit(1);
-
+    const { data:ex, error:selErr }=await sb
+      .from("handover_entries").select("id").eq("entry_id",entryId).eq("table_id","_meta").limit(1);
     if(selErr) throw selErr;
-
     if(ex?.length){
-      const { error } = await sb
-        .from("handover_entries")
-        .update({ row_data:m })
-        .eq("id", ex[0].id);
-
+      const { error }=await sb.from("handover_entries").update({row_data:m}).eq("id",ex[0].id);
       if(error) throw error;
     }else{
-      const { error } = await sb.from("handover_entries").insert({
-        table_id:"_meta",
-        row_data:m,
-        handover_date:entryDate,
-        local_id:"_meta",
-        entry_id:entryId
+      const { error }=await sb.from("handover_entries").insert({
+        table_id:"_meta",row_data:m,handover_date:entryDate,local_id:"_meta",entry_id:entryId
       });
-
       if(error) throw error;
     }
-
     setSyncStatus("ok");
   }catch(e){
     console.error(e);
@@ -543,83 +569,76 @@ function scheduleSave(tid,row){
   setSyncStatus("loading");
   clearTimeout(saveTimers[row.localId]);
   saveTimers[row.localId]=setTimeout(async ()=>{
-    try{
-      await saveRow(tid,row);
-    }catch(e){}
+    try{ await saveRow(tid,row); }catch(e){}
   },900);
 }
 
+/* ──────────────────────────────────────────
+   BACKGROUND SYNC  — FIX #2 #4 #13 #15
+────────────────────────────────────────── */
 async function bgSync(){
   if(!entryId) return;
+  const myVersion = _clearVersion;  // FIX #13: snapshot version at start
 
   try{
-    const { data, error } = await sb.from("handover_entries").select("*").eq("entry_id", entryId);
+    const { data, error }=await sb.from("handover_entries").select("*").eq("entry_id",entryId);
     if(error) throw error;
+
+    // Reset backoff on success  FIX #4
+    syncFailCount=0;
+    clearInterval(syncTimer);
+    syncTimer=setInterval(bgSync, SYNC_BASE_MS);
 
     let changed=false;
     const remoteSeen={};
-
-    TABLES.forEach(t=>{
-      if(!t.simple) remoteSeen[t.id]=new Set();
-    });
+    TABLES.forEach(t=>{ if(!t.simple) remoteSeen[t.id]=new Set(); });
 
     if(firstSync){
-      TABLES.forEach(t=>{
-        if(t.simple) return;
-        rows[t.id]=new Map();
-      });
+      TABLES.forEach(t=>{ if(!t.simple) rows[t.id]=new Map(); });
+    }
+
+    // FIX #2: look for _clear by timestamp, not by presence of a single row
+    let clearTs = null;
+    for(const item of data){
+      if(item.table_id==="_clear"){
+        clearTs = item.row_data?.ts || item.created_at || null;
+      }
+    }
+
+    // FIX #13: only react to clear if it's for this session's version
+    if(clearTs && myVersion===_clearVersion){
+      const lastClearKey = "lastClearTs_"+entryId;
+      const seenTs = sessionStorage.getItem(lastClearKey);
+      if(seenTs!==String(clearTs)){
+        sessionStorage.setItem(lastClearKey,String(clearTs));
+        _clearVersion++;
+        initState();
+        renderAll();
+        toast("Invoer gewist door een collega.","warn");
+        return;
+      }
     }
 
     for(const item of data){
       const tid=item.table_id;
-
-      if(tid==="_clear"){
-        if(!window._clearedAlready){
-          window._clearedAlready=true;
-          initState();
-          renderAll();
-          toast("Invoer gewist door een collega.","warn");
-        }
-        continue;
-      }
-
-      if(tid==="_meta"){
-        const m=item.row_data;
-        if(!m) continue;
-
-        const f={
-          datum:"meta-datum",
-          naam:"meta-naam",
-          tijd:"meta-tijd",
-          emails:"meta-emails",
-          wstr:"meta-wstr",
-          wsoph:"meta-wsoph",
-          wscc:"meta-wscc"
-        };
-
-        Object.entries(f).forEach(([k,id])=>{
-          const el=document.getElementById(id);
-          if(el && document.activeElement!==el) el.value=m[k]||"";
-        });
-        continue;
-      }
+      if(tid==="_clear"||tid==="_meta") continue;
 
       const t=tbl(tid);
       if(!t) continue;
 
       if(t.simple){
-        const ta=document.getElementById("simple-ta-"+tid);
         const nv=item.row_data?.text||"";
-
-        if((!ta || document.activeElement!==ta) && simples[tid]!==nv){
+        const ta=document.getElementById("simple-ta-"+tid);
+        if((!ta||document.activeElement!==ta) && simples[tid]!==nv){
           simples[tid]=nv;
+          // FIX #15: update textarea directly without full re-render (preserves cursor)
+          if(ta && document.activeElement!==ta) ta.value=nv;
           changed=true;
         }
         continue;
       }
 
       if(!rows[tid]) rows[tid]=new Map();
-
       const lid=item.local_id||item.id;
       remoteSeen[tid].add(lid);
 
@@ -631,67 +650,83 @@ async function bgSync(){
       }else{
         const lr=rows[tid].get(lid);
         if(!lr.dbId) lr.dbId=item.id;
-
         if(!lr.dirty){
           t.cols.forEach(c=>{
-            const remoteVal=item.row_data?.[c.key]||"";
-            if(lr[c.key]!==remoteVal){
-              lr[c.key]=remoteVal;
-              changed=true;
-            }
+            const rv=item.row_data?.[c.key]||"";
+            if(lr[c.key]!==rv){ lr[c.key]=rv; changed=true; }
           });
         }
       }
     }
 
+    // Remove rows deleted remotely
     TABLES.forEach(t=>{
       if(t.simple) return;
       if(!rows[t.id]) rows[t.id]=new Map();
-
       for(const [lid,row] of rows[t.id]){
-        const isDbBacked=!!row.dbId;
-        const stillExistsRemotely=remoteSeen[t.id].has(lid);
-
-        if(isDbBacked && !stillExistsRemotely && !row.dirty){
-          rows[t.id].delete(lid);
-          changed=true;
+        if(row.dbId && !remoteSeen[t.id].has(lid) && !row.dirty){
+          rows[t.id].delete(lid); changed=true;
         }
       }
     });
 
+    // Ensure minimum 3 empty rows
     if(firstSync){
       TABLES.forEach(t=>{
         if(t.simple) return;
         if(!rows[t.id]) rows[t.id]=new Map();
-        while(rows[t.id].size<3){
-          const id=uid();
-          rows[t.id].set(id,makeRow(t.id,id));
-        }
+        while(rows[t.id].size<3){ const id=uid(); rows[t.id].set(id,makeRow(t.id,id)); }
       });
-      firstSync=false;
-      changed=true;
+      firstSync=false; changed=true;
     }else{
       TABLES.forEach(t=>{
         if(t.simple) return;
-        while(rows[t.id].size<3){
-          const id=uid();
-          rows[t.id].set(id,makeRow(t.id,id));
-          changed=true;
+        while((rows[t.id]||new Map()).size<3){
+          const id=uid(); rows[t.id].set(id,makeRow(t.id,id)); changed=true;
         }
       });
     }
 
-    if(changed) renderAll();
+    // FIX #5: sync _meta without overwriting focused fields
+    const metaItem = data.find(i=>i.table_id==="_meta");
+    if(metaItem?.row_data){
+      const m=metaItem.row_data;
+      const fieldMap={datum:"meta-datum",naam:"meta-naam",tijd:"meta-tijd",emails:"meta-emails",wstr:"meta-wstr",wsoph:"meta-wsoph",wscc:"meta-wscc"};
+      Object.entries(fieldMap).forEach(([k,id])=>{
+        const el=document.getElementById(id);
+        // FIX #5: skip datum (readonly) and any currently-active field
+        if(el && id!=="meta-datum" && document.activeElement!==el){
+          if(el.value!==(m[k]||"")) el.value=m[k]||"";
+        }
+      });
+    }
+
+    if(changed) renderTabsAndCount();   // FIX #15: don't rebuild table area on every sync
     setSyncStatus("ok");
   }catch(e){
     console.error(e);
     setSyncStatus("error");
+
+    // FIX #4: exponential backoff on failure
+    syncFailCount++;
+    clearInterval(syncTimer);
+    const delay=Math.min(SYNC_BASE_MS * Math.pow(2,syncFailCount-1), SYNC_MAX_MS);
+    syncTimer=setInterval(bgSync, delay);
   }
 }
 
+/* ──────────────────────────────────────────
+   RENDER
+────────────────────────────────────────── */
 function renderAll(){
   renderTabs();
   renderTable();
+  updateCount();
+}
+
+// FIX #15: separate tab/count render (doesn't touch table area)
+function renderTabsAndCount(){
+  renderTabs();
   updateCount();
 }
 
@@ -700,7 +735,6 @@ function renderTabs(){
     const count=t.simple
       ? (simples[t.id]?.trim()?1:0)
       : [...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).length;
-
     return `<button class="tab${t.id===activeTab?" active":""}" style="--tab-color:${t.color}" onclick="switchTab('${t.id}')">
       ${t.icon} ${t.label}${count?` <span class="tab-badge">${count}</span>`:""}
     </button>`;
@@ -723,18 +757,22 @@ function renderTable(){
       simples[t.id]=e.target.value;
       updateCount();
       setSyncStatus("loading");
-
       clearTimeout(simpleTimers[t.id]);
       simpleTimers[t.id]=setTimeout(async ()=>{
-        try{
-          await saveSimple(t.id,e.target.value);
-        }catch(e){}
+        try{ await saveSimple(t.id,e.target.value); }catch(e){}
       },900);
     });
     return;
   }
 
   const rl=[...(rows[t.id]||new Map()).values()];
+
+  // FIX #3: derive column styles dynamically from table definition
+  const colStyles = {};
+  t.cols.forEach((c,i)=>{
+    if(c.w) colStyles[i]={cellWidth:Math.round(c.w * 0.264583)}; // px → mm approx for PDF only, here just index width
+  });
+
   const ths=t.cols.map(c=>`<th style="${c.w?`width:${c.w}px`:""}">${c.label}</th>`).join("")+`<th style="width:36px"></th>`;
   const trs=rl.map(row=>{
     const cells=t.cols.map(c=>{
@@ -753,11 +791,9 @@ function renderTable(){
     inp.addEventListener("input",onInput);
     inp.addEventListener("blur",onBlur);
   });
-
   document.querySelectorAll("#table-area .del-btn[data-lid]").forEach(btn=>{
     btn.addEventListener("click",()=>deleteRow(btn.dataset.tid,btn.dataset.lid));
   });
-
   document.getElementById("add-row-btn").addEventListener("click",()=>addRow(t.id));
 }
 
@@ -766,96 +802,69 @@ function updateCount(){
     if(t.simple) return s+(simples[t.id]?.trim()?1:0);
     return s+[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r)).length;
   },0);
-
   document.getElementById("entry-count").textContent=total+" items";
-  document.getElementById("send-btn").disabled=total===0 || isSending;
+  document.getElementById("send-btn").disabled=total===0||isSending;
 }
 
+/* ── INPUT HANDLERS ── */
 function onFocus(e){
   const {tid,lid,col}=e.target.dataset;
-  if(col==="wie" && !e.target.value && yourName){
+  if(col==="wie"&&!e.target.value&&yourName){
     e.target.value=yourName;
     const row=rows[tid]?.get(lid);
-    if(row){
-      row[col]=yourName;
-      row.dirty=true;
-      updateCount();
-      scheduleSave(tid,row);
-    }
+    if(row){ row[col]=yourName; row.dirty=true; updateCount(); scheduleSave(tid,row); }
   }
 }
-
 function onInput(e){
   const {tid,lid,col}=e.target.dataset;
   const row=rows[tid]?.get(lid);
   if(!row) return;
-  row[col]=e.target.value;
-  row.dirty=true;
-  updateCount();
-  scheduleSave(tid,row);
+  row[col]=e.target.value; row.dirty=true;
+  updateCount(); scheduleSave(tid,row);
 }
-
 function onBlur(e){
   const {tid,lid,col}=e.target.dataset;
   const row=rows[tid]?.get(lid);
   if(row) row[col]=e.target.value;
 }
 
-function switchTab(id){
-  activeTab=id;
-  renderAll();
-}
+function switchTab(id){ activeTab=id; renderAll(); }
 
 function addRow(tid){
   const id=uid();
   if(!rows[tid]) rows[tid]=new Map();
   rows[tid].set(id,makeRow(tid,id));
-
   const t=tbl(tid);
   const tbody=document.querySelector("#table-area tbody");
-  if(!tbody){
-    renderTable();
-    return;
-  }
-
+  if(!tbody){ renderTable(); return; }
   const cells=t.cols.map(c=>{
     const ph=c.key==="wie"&&yourName?yourName:c.label+"…";
     return `<td><input type="text" value="" placeholder="${ph}" data-tid="${tid}" data-lid="${id}" data-col="${c.key}"/></td>`;
   }).join("");
-
   const tr=document.createElement("tr");
   tr.innerHTML=cells+`<td style="text-align:center"><button class="del-btn" data-tid="${tid}" data-lid="${id}">×</button></td>`;
   tbody.appendChild(tr);
-
   tr.querySelectorAll("input").forEach(inp=>{
     inp.addEventListener("focus",onFocus);
     inp.addEventListener("input",onInput);
     inp.addEventListener("blur",onBlur);
   });
-
   tr.querySelector(".del-btn").addEventListener("click",()=>deleteRow(tid,id));
   tr.querySelector("input")?.focus();
 }
 
 async function deleteRow(tid,lid){
   const row=rows[tid]?.get(lid);
-
   try{
     if(row?.dbId){
-      const { error } = await sb.from("handover_entries").delete().eq("id",row.dbId);
+      const { error }=await sb.from("handover_entries").delete().eq("id",row.dbId);
       if(error) throw error;
     }
-
     rows[tid]?.delete(lid);
-
     const t=tbl(tid);
-    if(t && !t.simple){
-      while(rows[tid].size<3){
-        const id=uid();
-        rows[tid].set(id,makeRow(tid,id));
-      }
+    if(t&&!t.simple){
+      while(rows[tid].size<3){ const id=uid(); rows[tid].set(id,makeRow(tid,id)); }
     }
-
     renderAll();
   }catch(e){
     console.error(e);
@@ -863,29 +872,38 @@ async function deleteRow(tid,lid){
   }
 }
 
-async function clearAll(){
-  if(!confirm("Alle invoer wissen? Dit geldt voor iedereen.")) return;
+/* FIX #11: replace native confirm in clearAll */
+async function confirmClearAll(){
+  const ok = await showConfirm(
+    "Alles wissen?",
+    "Dit wist alle invoer voor iedereen die dit rapport open heeft. Dit kan niet ongedaan worden gemaakt.",
+    "Alles wissen",
+    true
+  );
+  if(!ok) return;
+  await doClearAll();
+}
 
+async function doClearAll(){
   try{
-    const delRes = await sb.from("handover_entries").delete().eq("entry_id",entryId);
+    const delRes=await sb.from("handover_entries").delete().eq("entry_id",entryId);
     if(delRes.error) throw delRes.error;
 
-    const insRes = await sb.from("handover_entries").insert({
+    // FIX #2: store a timestamp in the clear row so late joiners can detect it reliably
+    const clearTs = Date.now();
+    const insRes=await sb.from("handover_entries").insert({
       table_id:"_clear",
-      row_data:{cleared:true},
+      row_data:{cleared:true, ts:clearTs},
       handover_date:entryDate,
-      local_id:"_clear",
+      local_id:"_clear_"+clearTs,
       entry_id:entryId
     });
     if(insRes.error) throw insRes.error;
 
-    setTimeout(async ()=>{
-      try{
-        await sb.from("handover_entries").delete().eq("local_id","_clear").eq("entry_id",entryId);
-      }catch(e){}
-    },8000);
+    // Mark this instance as having seen this clear
+    sessionStorage.setItem("lastClearTs_"+entryId, String(clearTs));
+    _clearVersion++;
 
-    window._clearedAlready=true;
     initState();
     renderAll();
     toast("Alle invoer gewist.");
@@ -895,6 +913,9 @@ async function clearAll(){
   }
 }
 
+/* ──────────────────────────────────────────
+   META
+────────────────────────────────────────── */
 function readMeta(){
   return ["datum","naam","tijd","emails","wstr","wsoph","wscc"].reduce((m,k)=>{
     m[k]=document.getElementById("meta-"+k).value;
@@ -903,77 +924,62 @@ function readMeta(){
 }
 
 function bindMeta(date){
+  // FIX #5: datum is now readonly — set once, never touched by user or sync
   document.getElementById("meta-datum").value=dateToNL(date);
-  ["datum","naam","tijd","emails","wstr","wsoph","wscc"].forEach(k=>{
-    document.getElementById("meta-"+k).oninput=()=>{
+
+  // Bind only the editable fields
+  ["naam","tijd","emails","wstr","wsoph","wscc"].forEach(k=>{
+    const el=document.getElementById("meta-"+k);
+    el.oninput=()=>{
       setSyncStatus("loading");
       clearTimeout(metaTimer);
       metaTimer=setTimeout(async ()=>{
-        try{
-          await saveMeta(readMeta());
-        }catch(e){}
+        try{ await saveMeta(readMeta()); }catch(e){}
       },1000);
     };
   });
 }
 
+/* ──────────────────────────────────────────
+   NAME
+────────────────────────────────────────── */
 function openNameModal(){
   document.getElementById("name-input").value=yourName;
   openModal("name-modal");
   setTimeout(()=>document.getElementById("name-input").focus(),100);
 }
-
 function saveName(){
   yourName=document.getElementById("name-input").value.trim();
   localStorage.setItem("handover-name",yourName);
   document.getElementById("name-badge").textContent=yourName?`👤 ${yourName}`:"👤 Naam instellen";
   closeModal("name-modal");
 }
-
 document.getElementById("name-input").addEventListener("keydown",e=>{
   if(e.key==="Enter") saveName();
 });
 
+/* ──────────────────────────────────────────
+   PDF GENERATION  — FIX #3 #8
+────────────────────────────────────────── */
 function generatePDF(){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4",compress:false,putOnlyUsedFonts:true,floatPrecision:2});
-
-  doc.setProperties({
-    title:"Orderinvoer Dagrapport",
-    subject:"Dagrapport",
-    author:"Orderinvoer Team",
-    keywords:"dagrapport,orderinvoer",
-    creator:"jsPDF",
-    pdfVersion:"1.4"
-  });
+  doc.setProperties({title:"Orderinvoer Dagrapport",subject:"Dagrapport",author:"Orderinvoer Team",keywords:"dagrapport,orderinvoer",creator:"jsPDF",pdfVersion:"1.4"});
 
   const W=doc.internal.pageSize.getWidth();
   const m=readMeta();
   const tClr={
-    bijzonderheden:[79,142,247],
-    speciaal:[245,166,35],
-    invoeren:[155,109,255],
-    levertijden:[45,212,191],
-    ophalen:[244,114,182],
-    geannuleerd:[239,83,83],
-    onder150:[52,211,153],
-    na0000:[107,114,153],
-    onboarding:[79,142,247]
+    bijzonderheden:[79,142,247],speciaal:[245,166,35],invoeren:[155,109,255],
+    levertijden:[45,212,191],ophalen:[244,114,182],geannuleerd:[239,83,83],
+    onder150:[52,211,153],na0000:[107,114,153],onboarding:[79,142,247]
   };
 
-  doc.setFillColor(13,15,24);
-  doc.rect(0,0,W,44,"F");
-
-  doc.setTextColor(255,255,255);
-  doc.setFontSize(17);
-  doc.setFont("helvetica","bold");
+  // Header
+  doc.setFillColor(13,15,24); doc.rect(0,0,W,44,"F");
+  doc.setTextColor(255,255,255); doc.setFontSize(17); doc.setFont("helvetica","bold");
   doc.text("Orderinvoer Dagrapport",14,13);
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica","normal");
-  doc.setTextColor(220,225,245);
+  doc.setFontSize(10); doc.setFont("helvetica","normal"); doc.setTextColor(220,225,245);
   doc.text(`Datum: ${m.datum||todayNL()}     Naam: ${m.naam||"–"}     Aanvangstijd: ${m.tijd||"–"}     E-mails/InOne: ${m.emails||"–"}`,14,25);
-
   doc.setTextColor(180,190,230);
   doc.text(`Webshop TR: ${m.wstr||"–"}     Webshop ophalen: ${m.wsoph||"–"}     Webshop CC: ${m.wscc||"–"}`,14,36);
 
@@ -983,127 +989,107 @@ function generatePDF(){
     if(t.simple){
       const val=(simples[t.id]||"").trim();
       if(!val) return;
-
-      if(y>260){
-        doc.addPage();
-        y=16;
-      }
-
+      if(y>260){ doc.addPage(); y=16; }
       const [r,g,b]=tClr[t.id]||[120,120,200];
       doc.setFillColor(r,g,b);
       doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(9);
-      doc.setFont("helvetica","bold");
-      doc.text(t.label,18,y+5);
-      y+=9;
-
-      doc.setFontSize(9);
-      doc.setFont("helvetica","normal");
-      doc.setTextColor(50,55,80);
+      doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
+      doc.text(t.label,18,y+5); y+=9;
+      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(50,55,80);
       const lines=doc.splitTextToSize(val,W-28);
-      doc.text(lines,14,y+4);
-      y+=lines.length*5+8;
+      doc.text(lines,14,y+4); y+=lines.length*5+8;
       return;
     }
 
     const rl=[...(rows[t.id]||new Map()).values()].filter(r=>hasData(t.id,r));
     if(!rl.length) return;
-
-    if(y>255){
-      doc.addPage();
-      y=16;
-    }
+    if(y>255){ doc.addPage(); y=16; }
 
     const [r,g,b]=tClr[t.id]||[120,120,200];
     doc.setFillColor(r,g,b);
     doc.roundedRect(14,y,W-28,7,1.5,1.5,"F");
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica","bold");
-    doc.text(t.label,18,y+5);
-    y+=9;
+    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
+    doc.text(t.label,18,y+5); y+=9;
+
+    // FIX #3 & #8: build columnStyles dynamically from table definition; use pt not px
+    // FIX #8: font sizes reduced from 11/10.5 to 8/8 to prevent cell overflow
+    const dynColStyles={};
+    t.cols.forEach((c,idx)=>{
+      if(c.w) dynColStyles[idx]={cellWidth:c.w*0.26458};  // px to mm
+    });
 
     doc.autoTable({
       startY:y,
       head:[t.cols.map(c=>c.label)],
       body:rl.map(row=>t.cols.map(c=>row[c.key]||"")),
       theme:"grid",
-      headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:11,fontStyle:"bold"},
-      bodyStyles:{textColor:[40,45,70],fontSize:10.5,lineColor:[220,222,230],cellPadding:3},
+      headStyles:{fillColor:[30,34,53],textColor:[180,185,210],fontSize:8,fontStyle:"bold"},  // FIX #8
+      bodyStyles:{textColor:[40,45,70],fontSize:8,lineColor:[220,222,230],cellPadding:2.5},    // FIX #8
       alternateRowStyles:{fillColor:[248,249,252]},
-      columnStyles:{0:{cellWidth:50},2:{cellWidth:20},3:{cellWidth:30}},
+      columnStyles:dynColStyles,   // FIX #3
       tableWidth:"auto",
       margin:{left:10,right:10},
+      didDrawPage:(d)=>{ if(d.pageNumber>1) y=16; }
     });
 
     y=doc.lastAutoTable.finalY+7;
   });
 
-  doc.setFontSize(7.5);
-  doc.setTextColor(160,165,200);
+  doc.setFontSize(7.5); doc.setTextColor(160,165,200);
   doc.text(`Gegenereerd om ${new Date().toLocaleTimeString("nl-NL")} · Orderinvoer Team`,14,doc.internal.pageSize.getHeight()-7);
-
   return doc;
 }
 
+/* ──────────────────────────────────────────
+   EXCEL
+────────────────────────────────────────── */
 function generateExcelBase64(sqlData){
-  if(!Array.isArray(sqlData) || !sqlData.length) return null;
-
+  if(!Array.isArray(sqlData)||!sqlData.length) return null;
   const cleaned=sqlData.map(row=>{
     const r={...row};
     Object.keys(r).forEach(k=>{
-      if(typeof r[k]==='string' && /^\d{4}-\d{2}-\d{2}T00:00:00/.test(r[k])){
-        r[k]=r[k].slice(0,10);
-      }
+      if(typeof r[k]==="string"&&/^\d{4}-\d{2}-\d{2}T00:00:00/.test(r[k])) r[k]=r[k].slice(0,10);
     });
     return r;
   });
-
   const cols=Object.keys(cleaned[0]||{});
   const wsData=[cols,...cleaned.map(row=>cols.map(k=>row[k]??''))];
   const ws=XLSX.utils.aoa_to_sheet(wsData);
-
-  ws["!cols"]=cols.map(key=>({
-    wch:Math.max(key.length,...cleaned.slice(0,50).map(r=>String(r[key]||"").length))
-  }));
-
+  ws["!cols"]=cols.map(key=>({wch:Math.max(key.length,...cleaned.slice(0,50).map(r=>String(r[key]||"").length))}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,"Productie");
   return XLSX.write(wb,{bookType:"xlsx",type:"base64"});
 }
 
+/* ──────────────────────────────────────────
+   SEND  — FIX #12
+────────────────────────────────────────── */
 async function flushPendingSaves(){
   const tasks=[];
-
   TABLES.forEach(t=>{
     if(t.simple){
       clearTimeout(simpleTimers[t.id]);
       tasks.push(saveSimple(t.id,simples[t.id]||""));
       return;
     }
-
     for(const row of (rows[t.id]||new Map()).values()){
       clearTimeout(saveTimers[row.localId]);
-      if(row.dirty || row.dbId){
-        tasks.push(saveRow(t.id,row));
-      }
+      if(row.dirty||row.dbId) tasks.push(saveRow(t.id,row));
     }
   });
-
   tasks.push(saveMeta(readMeta()));
   await Promise.all(tasks);
 }
 
 async function handleSend(){
-  if(isSending) return;
-  if(!entryId) return;
-
+  if(isSending||!entryId) return;
   isSending=true;
 
   const btn=document.getElementById("send-btn");
   const lbl=document.getElementById("send-label");
 
+  // FIX #12: save original btn style to restore on error
+  const origBg=btn.style.background;
   btn.disabled=true;
   btn.style.background="";
   lbl.innerHTML='<span class="spin"></span> Versturen…';
@@ -1113,131 +1099,85 @@ async function handleSend(){
 
     const doc=generatePDF();
     const m=readMeta();
-
     const displayDate=m.datum||dateToNL(entryDate);
     const fileDate=displayDate.replace(/\//g,"-");
-
     const fname=`Dagrapport_${fileDate}.pdf`;
     const pdfB64=doc.output("datauristring").split(",")[1];
 
     const summary={};
     TABLES.forEach(t=>{
-      if(t.simple){
-        summary[t.label]=simples[t.id]||"";
-        return;
-      }
-
+      if(t.simple){ summary[t.label]=simples[t.id]||""; return; }
       summary[t.label]=[...(rows[t.id]||new Map()).values()]
         .filter(r=>hasData(t.id,r))
-        .map(r=>{
-          const o={};
-          t.cols.forEach(c=>o[c.label]=r[c.key]||"");
-          return o;
-        });
+        .map(r=>{ const o={}; t.cols.forEach(c=>o[c.label]=r[c.key]||""); return o; });
     });
 
     let excelB64=null;
     const excelFname=`Productie_${fileDate}.xlsx`;
 
+    // Phase 1: fetch Excel data
     try{
       const res1=await fetch(PA_TRIGGER_URL,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          datum:entryDate,
-          datumDisplay:displayDate,
-          filename:fname,
-          pdfBase64:pdfB64,
-          meta:m,
-          summary,
-          requestExcel:true
-        })
+        body:JSON.stringify({datum:entryDate,datumDisplay:displayDate,filename:fname,pdfBase64:pdfB64,meta:m,summary,requestExcel:true})
       });
-
       const raw1=await res1.text();
       let payload1=null;
-
-      try{
-        payload1=raw1?JSON.parse(raw1):null;
-      }catch{
-        payload1=raw1;
-      }
-
-      if(!res1.ok){
-        throw new Error(typeof payload1==="object" ? (payload1?.message || `PA ${res1.status}`) : `PA ${res1.status}`);
-      }
-
-      const sqlData=Array.isArray(payload1) ? payload1 : payload1?.sqlData;
-      if(sqlData && sqlData.length){
-        excelB64=generateExcelBase64(sqlData);
-      }
+      try{ payload1=raw1?JSON.parse(raw1):null; }catch{ payload1=raw1; }
+      if(!res1.ok) throw new Error(typeof payload1==="object"?(payload1?.message||`PA ${res1.status}`):`PA ${res1.status}`);
+      const sqlData=Array.isArray(payload1)?payload1:payload1?.sqlData;
+      if(sqlData&&sqlData.length) excelB64=generateExcelBase64(sqlData);
     }catch(e){
-      console.warn("Excel ophalen mislukt:",e);
+      console.warn("Excel ophalen mislukt (niet kritiek):",e);
+      // Non-fatal: continue without Excel
     }
 
+    // Phase 2: send email
     const res2=await fetch(PA_TRIGGER_URL,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        datum:entryDate,
-        datumDisplay:displayDate,
-        filename:fname,
-        pdfBase64:pdfB64,
-        meta:m,
-        summary,
-        sendEmail:true,
-        excelBase64:excelB64,
-        excelFilename:excelFname
-      })
+      body:JSON.stringify({datum:entryDate,datumDisplay:displayDate,filename:fname,pdfBase64:pdfB64,meta:m,summary,sendEmail:true,excelBase64:excelB64,excelFilename:excelFname})
     });
-
     const raw2=await res2.text();
     let payload2=null;
+    try{ payload2=raw2?JSON.parse(raw2):null; }catch{ payload2=raw2; }
+    if(!res2.ok) throw new Error(typeof payload2==="object"?(payload2?.message||`PA ${res2.status}`):`PA ${res2.status}`);
+    if(payload2&&typeof payload2==="object"&&payload2.success===false) throw new Error(payload2.message||"Flow returned failure");
 
-    try{
-      payload2=raw2?JSON.parse(raw2):null;
-    }catch{
-      payload2=raw2;
-    }
-
-    if(!res2.ok){
-      throw new Error(typeof payload2==="object" ? (payload2?.message || `PA ${res2.status}`) : `PA ${res2.status}`);
-    }
-
-    if(payload2 && typeof payload2==="object" && payload2.success===false){
-      throw new Error(payload2.message || "Flow returned failure");
-    }
-
+    // Success
     lbl.textContent="✓ Verstuurd!";
     btn.style.background="linear-gradient(135deg,#34D399,#059669)";
     toast("✅ Dagrapport verstuurd!","success");
 
     const delRes=await sb.from("handover_entries").delete().eq("entry_id",entryId);
-    if(delRes.error) throw delRes.error;
+    if(delRes.error) console.warn("Cleanup na versturen mislukt:",delRes.error); // non-fatal
 
     setTimeout(()=>{
+      // FIX #12: reset button state BEFORE goHome in case goHome is slow
       lbl.textContent="📩 Dagrapport versturen";
-      btn.style.background="";
+      btn.style.background=origBg;
       btn.disabled=false;
+      isSending=false;
       goHome();
     },2000);
 
   }catch(e){
     console.error(e);
+    // FIX #12: always restore button on failure
     lbl.textContent="📩 Dagrapport versturen";
-    btn.style.background="";
+    btn.style.background=origBg;
     btn.disabled=false;
-    toast("❌ Versturen mislukt.","error");
-  }finally{
     isSending=false;
     updateCount();
+    toast("❌ Versturen mislukt: "+(e.message||"onbekende fout"),"error");
   }
 }
 
+/* ── INIT ── */
 if(yourName){
   document.getElementById("name-badge").textContent=`👤 ${yourName}`;
 }
-
 setSyncStatus("ok");
 loadDashboard();
 </script>
